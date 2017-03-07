@@ -82,6 +82,7 @@ enum rte_cryptodev_type {
 	RTE_CRYPTODEV_ZUC_PMD,		/**< ZUC PMD */
 	RTE_CRYPTODEV_OPENSSL_PMD,    /**<  OpenSSL PMD */
 	RTE_CRYPTODEV_ARMV8_PMD,	/**< ARMv8 crypto PMD */
+	RTE_CRYPTODEV_MRVL_PMD,	/**< ARMv8 crypto PMD */
 	RTE_CRYPTODEV_SCHEDULER_PMD,	/**< Crypto Scheduler PMD */
 };
 
