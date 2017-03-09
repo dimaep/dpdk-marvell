@@ -187,8 +187,11 @@ mrvl_crypto_pmd_info_get(struct rte_cryptodev *dev,
 static int
 mrvl_crypto_pmd_qp_release(struct rte_cryptodev *dev, uint16_t qp_id)
 {
+	struct mrvl_crypto_qp *qp =
+			(struct mrvl_crypto_qp *) dev->data->queue_pairs[qp_id];
 
 	if (dev->data->queue_pairs[qp_id] != NULL) {
+		sam_cio_deinit(qp->cio);
 		rte_free(dev->data->queue_pairs[qp_id]);
 		dev->data->queue_pairs[qp_id] = NULL;
 	}
@@ -204,6 +207,7 @@ mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
 {
 	struct mrvl_crypto_qp *qp = NULL;
 	unsigned int n;
+	struct mrvl_crypto_private *priv = dev->data->dev_private;
 
 	/* Free memory prior to re-allocation if needed. */
 	if (dev->data->queue_pairs[qp_id] != NULL)
@@ -218,13 +222,20 @@ mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
 		qp->id = qp_id;
 		dev->data->queue_pairs[qp_id] = qp;
 
-		n = snprintf(qp->name, sizeof(qp->name), "mrvl_crypto_pmd_%u_qp_%u",
+		n = snprintf(qp->name, sizeof(qp->name), "cio-%u:%u",
 				dev->data->dev_id, qp->id);
 
 		if (n >= sizeof(qp->name))
 			break;
 
 		/* TODO: init musdk qp */
+
+		qp->cio_params.match = qp->name;
+		qp->cio_params.size = SAM_HW_RING_SIZE;
+		qp->cio_params.num_sessions = priv->max_nb_sessions;
+		qp->cio_params.max_buf_size = SAM_SA_DMABUF_SIZE;
+		if (sam_cio_init(&qp->cio_params, &qp->cio) < 0)
+			break;
 
 		qp->sess_mp = dev->data->session_pool;
 

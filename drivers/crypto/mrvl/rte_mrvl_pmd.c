@@ -44,35 +44,6 @@
 
 static int cryptodev_mrvl_crypto_uninit(const char *name);
 
-/**
- * Pointers to the supported combined mode crypto functions are stored
- * in the static tables. Each combined (chained) cryptographic operation
- * can be described by a set of numbers:
- * - order:	order of operations (cipher, auth) or (auth, cipher)
- * - direction:	encryption or decryption
- * - calg:	cipher algorithm such as AES_CBC, AES_CTR, etc.
- * - aalg:	authentication algorithm such as SHA1, SHA256, etc.
- * - keyl:	cipher key length, for example 128, 192, 256 bits
- *
- * In order to quickly acquire each function pointer based on those numbers,
- * a hierarchy of arrays is maintained. The final level, 3D array is indexed
- * by the combined mode function parameters only (cipher algorithm,
- * authentication algorithm and key length).
- *
- * This gives 3 memory accesses to obtain a function pointer instead of
- * traversing the array manually and comparing function parameters on each loop.
- *
- *                   +--+CRYPTO_FUNC
- *            +--+ENC|
- *      +--+CA|
- *      |     +--+DEC
- * ORDER|
- *      |     +--+ENC
- *      +--+AC|
- *            +--+DEC
- *
- */
-
 /* Evaluate to key length definition */
 #define KEYL(keyl)		(MRVL_CRYPTO_CIPHER_KEYLEN_ ## keyl)
 
@@ -93,22 +64,24 @@ static enum mrvl_crypto_chain_order
 mrvl_crypto_get_chain_order(const struct rte_crypto_sym_xform *xform)
 {
 
-	/*
-	 * This driver currently covers only chained operations.
-	 * Ignore only cipher or only authentication operations
-	 * or chains longer than 2 xform structures.
-	 */
-	if (xform->next == NULL || xform->next->next != NULL)
+	/* Currently Marvell supports max 2 operations in chain */
+	if (xform->next != NULL && xform->next->next != NULL)
 		return MRVL_CRYPTO_CHAIN_NOT_SUPPORTED;
 
-	if (xform->type == RTE_CRYPTO_SYM_XFORM_AUTH) {
-		if (xform->next->type == RTE_CRYPTO_SYM_XFORM_CIPHER)
+	if (xform->next != NULL) {
+		if ( (xform->type == RTE_CRYPTO_SYM_XFORM_AUTH) &&
+			 (xform->next->type == RTE_CRYPTO_SYM_XFORM_CIPHER) )
 			return MRVL_CRYPTO_CHAIN_AUTH_CIPHER;
-	}
 
-	if (xform->type == RTE_CRYPTO_SYM_XFORM_CIPHER) {
-		if (xform->next->type == RTE_CRYPTO_SYM_XFORM_AUTH)
-			return MRVL_CRYPTO_CHAIN_CIPHER_AUTH;
+		if ( (xform->type == RTE_CRYPTO_SYM_XFORM_CIPHER) &&
+			 (xform->next->type == RTE_CRYPTO_SYM_XFORM_AUTH) )
+				return MRVL_CRYPTO_CHAIN_CIPHER_AUTH;
+	} else {
+		if (xform->type == RTE_CRYPTO_SYM_XFORM_AUTH)
+			return MRVL_CRYPTO_CHAIN_AUTH_ONLY;
+
+		if (xform->type == RTE_CRYPTO_SYM_XFORM_CIPHER)
+			return MRVL_CRYPTO_CHAIN_CIPHER_ONLY;
 	}
 
 	return MRVL_CRYPTO_CHAIN_NOT_SUPPORTED;
@@ -417,9 +390,9 @@ cryptodev_mrvl_crypto_create(struct rte_crypto_vdev_init_params *init_params)
 	dev->dev_type = RTE_CRYPTODEV_MRVL_PMD;
 	dev->dev_ops = rte_mrvl_crypto_pmd_ops;
 
-	/* register rx/tx burst functions for data path */
-	dev->dequeue_burst = mrvl_crypto_pmd_dequeue_burst;
+	/* Register rx/tx burst functions for data path. */
 	dev->enqueue_burst = mrvl_crypto_pmd_enqueue_burst;
+	dev->dequeue_burst = mrvl_crypto_pmd_dequeue_burst;
 
 	dev->feature_flags = RTE_CRYPTODEV_FF_SYMMETRIC_CRYPTO |
 			RTE_CRYPTODEV_FF_SYM_OPERATION_CHAINING |
@@ -430,6 +403,11 @@ cryptodev_mrvl_crypto_create(struct rte_crypto_vdev_init_params *init_params)
 
 	internals->max_nb_qpairs = init_params->max_nb_queue_pairs;
 	internals->max_nb_sessions = init_params->max_nb_sessions;
+
+	/* TODO: Make sure DMA MEM has not been already initialized. */
+	ret = mv_sys_dma_mem_init(DMA_MEMSIZE);
+	if (ret < 0)
+		return ret;
 
 	return 0;
 
@@ -442,7 +420,7 @@ init_error:
 	return -EFAULT;
 }
 
-/** Initialise the crypto device */
+/** Initialise the crypto device. */
 static int
 cryptodev_mrvl_crypto_init(const char *name,
 		const char *input_args)
@@ -478,7 +456,7 @@ cryptodev_mrvl_crypto_uninit(const char *name)
 		return -EINVAL;
 
 	RTE_LOG(INFO, PMD,
-		"Closing Mravell crypto device %s on numa socket %u\n",
+		"Closing Marvell crypto device %s on numa socket %u\n",
 		name, rte_socket_id());
 
 	return 0;

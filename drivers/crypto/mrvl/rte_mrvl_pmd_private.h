@@ -33,6 +33,8 @@
 #ifndef _RTE_MRVL_PMD_PRIVATE_H_
 #define _RTE_MRVL_PMD_PRIVATE_H_
 
+#include "rte_mrvl_compat.h"
+
 #define MRVL_CRYPTO_LOG_ERR(fmt, args...) \
 	RTE_LOG(ERR, CRYPTODEV, "[%s] %s() line %u: " fmt "\n",  \
 			RTE_STR(CRYPTODEV_NAME_MRVL_CRYPTO_PMD), \
@@ -78,8 +80,11 @@ do {								\
 #define SHA_AUTH_KEY_MAX			SHA256_AUTH_KEY_LENGTH
 #define SHA_BLOCK_MAX				SHA256_BLOCK_SIZE
 
+#define DMA_MEMSIZE					(2048)
 /** the operation order mode enumerator */
 enum mrvl_crypto_chain_order {
+	MRVL_CRYPTO_CHAIN_CIPHER_ONLY,
+	MRVL_CRYPTO_CHAIN_AUTH_ONLY,
 	MRVL_CRYPTO_CHAIN_CIPHER_AUTH,
 	MRVL_CRYPTO_CHAIN_AUTH_CIPHER,
 	MRVL_CRYPTO_CHAIN_NOT_SUPPORTED,
@@ -106,20 +111,20 @@ enum mrvl_crypto_cipher_keylen {
 
 typedef void (*crypto_key_sched_t)(uint8_t *, const uint8_t *);
 
-/** private data structure for each the crypto device */
+/** Private data structure for each crypto device. */
 struct mrvl_crypto_private {
-	unsigned int max_nb_qpairs;
-	/**< Max number of queue pairs */
-	unsigned int max_nb_sessions;
-	/**< Max number of sessions */
+	unsigned int max_nb_qpairs; 	/**< Max number of queue pairs */
+	unsigned int max_nb_sessions;	/**< Max number of sessions */
 };
 
 /** Marvell crypto queue pair */
 struct mrvl_crypto_qp {
 	uint16_t id; /**< Queue Pair Identifier */
 	//struct rte_ring *processed_ops;/**< Ring for placing process packets */
+	struct sam_cio *cio;
 	struct rte_mempool *sess_mp; /**< Session Mempool */
 	struct rte_cryptodev_stats stats; /**< Queue pair statistics */
+	struct sam_cio_params cio_params;
 	char name[RTE_CRYPTODEV_NAME_LEN]; /**< Unique Queue Pair Name */
 } __rte_cache_aligned;
 
