@@ -130,27 +130,27 @@ struct mrvl_crypto_qp {
 
 /** Mrvl crypto private session structure */
 struct mrvl_crypto_session {
-	enum mrvl_crypto_chain_order chain_order;
-	/**< chain order mode */
+	struct sam_session_params sam_sess_params;
+	struct sam_sa *sam_sess;
+	struct rte_cryptodev *dev;
+	uint8_t key[256];
+
+#if 0
+	enum mrvl_crypto_chain_order chain_order;	/**< chain order mode */
 
 	/** Cipher Parameters */
 	struct {
 		enum rte_crypto_cipher_operation direction;
 		/**< cipher operation direction */
-		enum rte_crypto_cipher_algorithm algo;
-		/**< cipher algorithm */
-		int iv_len;
-		/**< IV length */
+		enum rte_crypto_cipher_algorithm algo;	/**< cipher algorithm */
+		int iv_len;								/**< IV length */
 
 		struct {
-			uint8_t data[256];
-			/**< key data */
-			size_t length;
-			/**< key length in bytes */
+			uint8_t data[256];					/**< key data */
+			size_t length;						/**< key length in bytes */
 		} key;
 
-		crypto_key_sched_t key_sched;
-		/**< Key schedule function */
+		crypto_key_sched_t key_sched;			/**< Key schedule function */
 	} cipher;
 
 	/** Authentication Parameters */
@@ -177,11 +177,12 @@ struct mrvl_crypto_session {
 			} hmac;
 		};
 	} auth;
-
+#endif
 } __rte_cache_aligned;
 
 /** Set and validate the crypto session parameters */
-extern int mrvl_crypto_set_session_parameters(
+extern int mrvl_crypto_prepare_session_parameters(
+		struct rte_cryptodev *dev,
 		struct mrvl_crypto_session *sess,
 		const struct rte_crypto_sym_xform *xform);
 /** device specific operations function pointer structure */

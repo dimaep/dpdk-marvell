@@ -53,6 +53,65 @@ static int cryptodev_mrvl_crypto_uninit(const char *name);
 #define AUTH_SHA1_HMAC		RTE_CRYPTO_AUTH_SHA1_HMAC
 #define AUTH_SHA256_HMAC	RTE_CRYPTO_AUTH_SHA256_HMAC
 
+#define BITS2BYTES(x) ((x) >> 3)
+
+/* The idea is to have Not Supported value as default (0)
+ * This way we need only to define proper map sizes,
+ * non-initialized values will be by default not supported. */
+enum algo_supported {
+	ALGO_NOT_SUPPORTED = 0,
+	ALGO_SUPPORTED = 1,
+};
+
+struct cipher_params_mapping {
+	enum algo_supported  supported;
+	enum sam_cipher_alg  cipher_alg;	/**< cipher algorithm */
+	enum sam_cipher_mode cipher_mode;	/**< cipher mode */
+	unsigned max_key_len;			/**< maximum key length (in bytes)*/
+}
+/* We want to squeeze in multiple maps into the cache line. */
+__rte_aligned(32);
+
+struct auth_params_mapping {
+	enum algo_supported supported;
+	enum sam_auth_alg   auth_alg;		/**< auth algorithm */
+}
+/* We want to squeeze in multiple maps into the cache line. */
+__rte_aligned(16);
+
+static const
+struct cipher_params_mapping cipher_map[RTE_CRYPTO_CIPHER_LIST_END] = {
+	[RTE_CRYPTO_CIPHER_3DES_CBC] = {
+		.supported = ALGO_SUPPORTED,
+		.cipher_alg = SAM_CIPHER_3DES,
+		.cipher_mode = SAM_CIPHER_CBC,
+		.max_key_len = BITS2BYTES(192) },
+	[RTE_CRYPTO_CIPHER_3DES_CTR] = {
+		.supported = ALGO_SUPPORTED,
+		.cipher_alg = SAM_CIPHER_3DES,
+		.cipher_mode = SAM_CIPHER_CTR,
+		.max_key_len = BITS2BYTES(192) },
+	[RTE_CRYPTO_CIPHER_3DES_ECB] = {
+		.supported = ALGO_SUPPORTED,
+		.cipher_alg = SAM_CIPHER_3DES,
+		.cipher_mode = SAM_CIPHER_ECB,
+		.max_key_len = BITS2BYTES(192) },
+	[RTE_CRYPTO_CIPHER_AES_CBC] = {
+		.supported = ALGO_SUPPORTED,
+		.cipher_alg = SAM_CIPHER_AES,
+		.cipher_mode = SAM_CIPHER_CBC,
+		.max_key_len = BITS2BYTES(256) },
+};
+
+static const
+struct auth_params_mapping auth_map[RTE_CRYPTO_AUTH_LIST_END] = {
+	[RTE_CRYPTO_AUTH_MD5] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_MD5},
+	[RTE_CRYPTO_AUTH_SHA1_HMAC] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA1},
+	[RTE_CRYPTO_AUTH_SHA256_HMAC] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_256},
+};
 /*
  *------------------------------------------------------------------------------
  * Session Prepare
@@ -63,8 +122,7 @@ static int cryptodev_mrvl_crypto_uninit(const char *name);
 static enum mrvl_crypto_chain_order
 mrvl_crypto_get_chain_order(const struct rte_crypto_sym_xform *xform)
 {
-
-	/* Currently Marvell supports max 2 operations in chain */
+	/* Currently, Marvell supports max 2 operations in chain */
 	if (xform->next != NULL && xform->next->next != NULL)
 		return MRVL_CRYPTO_CHAIN_NOT_SUPPORTED;
 
@@ -87,6 +145,8 @@ mrvl_crypto_get_chain_order(const struct rte_crypto_sym_xform *xform)
 	return MRVL_CRYPTO_CHAIN_NOT_SUPPORTED;
 }
 
+#if 0
+// To be completed along with particular algorithms.
 static inline void
 auth_hmac_pad_prepare(struct mrvl_crypto_session *sess,
 				const struct rte_crypto_sym_xform *xform)
@@ -114,11 +174,14 @@ auth_hmac_pad_prepare(struct mrvl_crypto_session *sess,
 		sess->auth.hmac.o_key_pad[i] ^= HMAC_OPAD_VALUE;
 	}
 }
+#endif
 
 static inline int
-auth_set_prerequisites(struct mrvl_crypto_session *sess,
-			const struct rte_crypto_sym_xform *xform)
+auth_set_prerequisites(struct mrvl_crypto_session *sess __rte_unused,
+			const struct rte_crypto_sym_xform *xform __rte_unused)
 {
+#if 0
+// To be completed along with particular algorithms.
 	uint8_t partial[64] = { 0 };
 
 	switch (xform->auth.algo) {
@@ -194,14 +257,17 @@ auth_set_prerequisites(struct mrvl_crypto_session *sess,
 	default:
 		break;
 	}
+#endif
 
 	return 0;
 }
 
 static inline int
-cipher_set_prerequisites(struct mrvl_crypto_session *sess,
-			const struct rte_crypto_sym_xform *xform)
+cipher_set_prerequisites(struct mrvl_crypto_session *sess __rte_unused,
+			const struct rte_crypto_sym_xform *xform __rte_unused)
 {
+#if 0
+// To be completed along with particular algorithms.
 	crypto_key_sched_t cipher_key_sched;
 
 	cipher_key_sched = sess->cipher.key_sched;
@@ -209,121 +275,148 @@ cipher_set_prerequisites(struct mrvl_crypto_session *sess,
 		/* Set up cipher session key */
 		cipher_key_sched(sess->cipher.key.data, xform->cipher.key.data);
 	}
-
+#endif
 	return 0;
 }
 
 static int
-mrvl_crypto_set_session_chained_parameters(struct mrvl_crypto_session *sess,
+mrvl_crypto_set_cipher_session_parameters(struct mrvl_crypto_session *sess,
+		const struct rte_crypto_sym_xform *cipher_xform)
+{
+	/* Make sure we've got proper struct */
+	if (cipher_xform->type != RTE_CRYPTO_SYM_XFORM_CIPHER) {
+		MRVL_CRYPTO_LOG_ERR("Wrong xform struct provided!");
+		return -EINVAL;
+	}
+
+	/* See if map data is present and valid */
+	if ((cipher_xform->cipher.algo > RTE_DIM(cipher_map)) ||
+		(cipher_map[cipher_xform->cipher.algo].supported != ALGO_SUPPORTED)) {
+		MRVL_CRYPTO_LOG_ERR("Cipher algorithm not supported!");
+		return -EINVAL;
+	}
+
+	sess->sam_sess_params.cipher_alg =
+		cipher_map[cipher_xform->cipher.algo].cipher_alg;
+	sess->sam_sess_params.cipher_mode =
+		cipher_map[cipher_xform->cipher.algo].cipher_mode;
+
+	/* Assume IV will be passed together with data. */
+	sess->sam_sess_params.cipher_iv = NULL;
+
+	/* MAX key length is 192 bits (3 * 64). */
+	if (cipher_xform->cipher.key.length >
+		(cipher_map[cipher_xform->cipher.algo].max_key_len) ) {
+		MRVL_CRYPTO_LOG_ERR("Wrong key length!");
+		return -EINVAL;
+	}
+
+	sess->sam_sess_params.cipher_key_len = cipher_xform->cipher.key.length;
+	memcpy(sess->key, cipher_xform->cipher.key.data,
+			cipher_xform->cipher.key.length);
+	sess->sam_sess_params.cipher_key = sess->key;
+	return 0;
+}
+
+static int
+mrvl_crypto_set_auth_session_parameters(struct mrvl_crypto_session *sess,
+		const struct rte_crypto_sym_xform *auth_xform)
+{
+	/* Make sure we've got proper struct */
+	if (auth_xform->type != RTE_CRYPTO_SYM_XFORM_AUTH) {
+		MRVL_CRYPTO_LOG_ERR("Wrong xform struct provided!");
+		return -EINVAL;
+	}
+	/* See if map data is present and valid */
+	if ((auth_xform->auth.algo > RTE_DIM(auth_map)) ||
+		(cipher_map[auth_xform->auth.algo].supported != ALGO_SUPPORTED)) {
+		MRVL_CRYPTO_LOG_ERR("Auth algorithm not supported!");
+		return -EINVAL;
+	}
+
+	sess->sam_sess_params.auth_alg = auth_map[auth_xform->auth.algo].auth_alg;
+	sess->sam_sess_params.auth_aad_len =
+		auth_xform->auth.add_auth_data_length;
+	sess->sam_sess_params.auth_icv_len = auth_xform->auth.digest_length;
+	return 0;
+}
+
+static int
+mrvl_crypto_set_session_parameters(struct mrvl_crypto_session *sess,
 		const struct rte_crypto_sym_xform *cipher_xform,
 		const struct rte_crypto_sym_xform *auth_xform)
 {
-	enum rte_crypto_cipher_algorithm calg;
-
-	/* Validate and prepare scratch order of combined operations */
-	switch (sess->chain_order) {
-	case MRVL_CRYPTO_CHAIN_CIPHER_AUTH:
-	case MRVL_CRYPTO_CHAIN_AUTH_CIPHER:
-		break;
-	default:
-		return -EINVAL;
-	}
 	/* Select cipher direction */
-	sess->cipher.direction = cipher_xform->cipher.op;
-	/* Select cipher key */
-	sess->cipher.key.length = cipher_xform->cipher.key.length;
-	/* Set cipher direction */
-	/* Set cipher algorithm */
-	calg = cipher_xform->cipher.algo;
-
-	/* Select cipher algo */
-	switch (calg) {
-	/* Cover supported cipher algorithms */
-	case RTE_CRYPTO_CIPHER_AES_CBC:
-		sess->cipher.algo = calg;
-		/* IV len is always 16 bytes (block size) for AES CBC */
-		sess->cipher.iv_len = 16;
-		break;
-	default:
-		return -EINVAL;
-	}
-	/* Select auth generate/verify */
-	sess->auth.operation = auth_xform->auth.op;
-
-	/* Select auth algo */
-	switch (auth_xform->auth.algo) {
-	/* Cover supported hash algorithms */
-	case RTE_CRYPTO_AUTH_SHA1_HMAC:
-	case RTE_CRYPTO_AUTH_SHA256_HMAC: /* Fall through */
-		sess->auth.mode = MRVL_CRYPTO_AUTH_AS_HMAC;
-		break;
-	default:
+	if (cipher_xform != NULL) {
+		sess->sam_sess_params.dir =
+			(cipher_xform->cipher.op == RTE_CRYPTO_CIPHER_OP_ENCRYPT) ?
+						SAM_DIR_ENCRYPT :
+						SAM_DIR_DECRYPT;
+	} else if (auth_xform != NULL) {
+		sess->sam_sess_params.dir =
+			(auth_xform->auth.op == RTE_CRYPTO_AUTH_OP_GENERATE) ?
+						SAM_DIR_ENCRYPT :
+						SAM_DIR_DECRYPT;
+	} else {
+		/* Having empty both cipher and algo is definitely an error */
 		return -EINVAL;
 	}
 
-	/* Verify supported key lengths and extract proper algorithm */
-	switch (cipher_xform->cipher.key.length << 3) {
-	case 128:
-	case 192:
-	case 256:
-		/* These key lengths are not supported yet */
-	default: /* Fall through */
-		sess->cipher.key_sched = NULL;
+	if ((cipher_xform != NULL) &&
+		((mrvl_crypto_set_cipher_session_parameters(sess, cipher_xform) < 0) ||
+		(cipher_set_prerequisites(sess, cipher_xform) != 0))) {
 		return -EINVAL;
 	}
 
-	/* Set up cipher session prerequisites */
-	if (cipher_set_prerequisites(sess, cipher_xform) != 0)
+	if ((auth_xform != NULL) &&
+		((mrvl_crypto_set_auth_session_parameters(sess, auth_xform) < 0) ||
+		(auth_set_prerequisites(sess, auth_xform) != 0))) {
 		return -EINVAL;
-
-	/* Set up authentication session prerequisites */
-	if (auth_set_prerequisites(sess, auth_xform) != 0)
-		return -EINVAL;
-
+	}
 	return 0;
 }
 
 /** Parse crypto xform chain and set private session parameters */
 int
-mrvl_crypto_set_session_parameters(struct mrvl_crypto_session *sess,
+mrvl_crypto_prepare_session_parameters(struct rte_cryptodev *dev,
+		struct mrvl_crypto_session *sess,
 		const struct rte_crypto_sym_xform *xform)
 {
 	const struct rte_crypto_sym_xform *cipher_xform = NULL;
 	const struct rte_crypto_sym_xform *auth_xform = NULL;
-	bool is_chained_op;
+	enum mrvl_crypto_chain_order chain_order;
 	int ret;
 
 	/* Filter out spurious/broken requests */
 	if (xform == NULL)
 		return -EINVAL;
 
-	sess->chain_order = mrvl_crypto_get_chain_order(xform);
-	switch (sess->chain_order) {
+	sess->dev = dev;
+
+	chain_order = mrvl_crypto_get_chain_order(xform);
+	switch (chain_order) {
 	case MRVL_CRYPTO_CHAIN_CIPHER_AUTH:
 		cipher_xform = xform;
 		auth_xform = xform->next;
-		is_chained_op = true;
 		break;
 	case MRVL_CRYPTO_CHAIN_AUTH_CIPHER:
 		auth_xform = xform;
 		cipher_xform = xform->next;
-		is_chained_op = true;
+		break;
+	case MRVL_CRYPTO_CHAIN_CIPHER_ONLY:
+		cipher_xform = xform;
+		break;
+	case MRVL_CRYPTO_CHAIN_AUTH_ONLY:
+		auth_xform = xform;
 		break;
 	default:
-		is_chained_op = false;
 		return -EINVAL;
 	}
 
-	if (is_chained_op) {
-		ret = mrvl_crypto_set_session_chained_parameters(sess,
-						cipher_xform, auth_xform);
-		if (unlikely(ret != 0)) {
-			MRVL_CRYPTO_LOG_ERR(
-			"Invalid/unsupported chained (cipher/auth) parameters");
-			return -EINVAL;
-		}
-	} else {
-		MRVL_CRYPTO_LOG_ERR("Invalid/unsupported operation");
+	ret = mrvl_crypto_set_session_parameters(sess, cipher_xform, auth_xform);
+	if (unlikely(ret != 0)) {
+		MRVL_CRYPTO_LOG_ERR(
+		"Invalid/unsupported (cipher/auth) parameters");
 		return -EINVAL;
 	}
 
@@ -345,18 +438,18 @@ mrvl_crypto_set_session_parameters(struct mrvl_crypto_session *sess,
 
 /** Enqueue burst */
 static uint16_t
-mrvl_crypto_pmd_enqueue_burst(void *queue_pair __attribute__((unused)),
-		struct rte_crypto_op **ops __attribute__((unused)),
-		uint16_t nb_ops __attribute__((unused)))
+mrvl_crypto_pmd_enqueue_burst(void *queue_pair __rte_unused,
+		struct rte_crypto_op **ops __rte_unused,
+		uint16_t nb_ops __rte_unused)
 {
 	return 0;
 }
 
 /** Dequeue burst */
 static uint16_t
-mrvl_crypto_pmd_dequeue_burst(void *queue_pair __attribute__((unused)),
-		struct rte_crypto_op **ops __attribute__((unused)),
-		uint16_t nb_ops __attribute__((unused)))
+mrvl_crypto_pmd_dequeue_burst(void *queue_pair __rte_unused,
+		struct rte_crypto_op **ops __rte_unused,
+		uint16_t nb_ops __rte_unused)
 {
 	return 0;
 }

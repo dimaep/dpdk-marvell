@@ -202,7 +202,7 @@ mrvl_crypto_pmd_qp_release(struct rte_cryptodev *dev, uint16_t qp_id)
 /** Setup a queue pair */
 static int
 mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
-		const struct rte_cryptodev_qp_conf *qp_conf __attribute__((unused)),
+		const struct rte_cryptodev_qp_conf *qp_conf __rte_unused,
 		 int socket_id)
 {
 	struct mrvl_crypto_qp *qp = NULL;
@@ -228,12 +228,11 @@ mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
 		if (n >= sizeof(qp->name))
 			break;
 
-		/* TODO: init musdk qp */
-
 		qp->cio_params.match = qp->name;
 		qp->cio_params.size = SAM_HW_RING_SIZE;
 		qp->cio_params.num_sessions = priv->max_nb_sessions;
 		qp->cio_params.max_buf_size = SAM_SA_DMABUF_SIZE;
+
 		if (sam_cio_init(&qp->cio_params, &qp->cio) < 0)
 			break;
 
@@ -284,16 +283,23 @@ mrvl_crypto_pmd_session_configure(struct rte_cryptodev *dev __rte_unused,
 		struct rte_crypto_sym_xform *xform, void *sess)
 {
 	if (unlikely(sess == NULL)) {
-		MRVL_CRYPTO_LOG_ERR("invalid session struct");
+		MRVL_CRYPTO_LOG_ERR("NULL session struct");
 		return NULL;
 	}
 
-	if (mrvl_crypto_set_session_parameters(
+	if (mrvl_crypto_prepare_session_parameters(dev,
 			sess, xform) != 0) {
-		MRVL_CRYPTO_LOG_ERR("failed configure session parameters");
+		MRVL_CRYPTO_LOG_ERR("Failed to configure session parameters.");
 		return NULL;
 	}
-
+/* To be done later, when first packet arrives for correct qpair.
+	struct mrvl_crypto_session *mrvl_sess =
+			(struct mrvl_crypto_session *) sess;
+	if (sam_session_create(mrvl_sess->dev->cio, &mrvl_sess->sam_sess_params,
+			&mrvl_sess->sam_sess)) {
+		//TODO:Cleanup & Log?
+		return NULL;
+	}*/
 	return sess;
 }
 
@@ -302,10 +308,17 @@ static void
 mrvl_crypto_pmd_session_clear(struct rte_cryptodev *dev __rte_unused,
 				void *sess)
 {
+	struct mrvl_crypto_session *mrvl_sess =
+			(struct mrvl_crypto_session *) sess;
 
-	/* Zero out the whole structure */
-	if (sess)
+	if (sess) {
+		if (mrvl_sess->sam_sess &&
+				sam_session_destroy(mrvl_sess->sam_sess) < 0) {
+			MRVL_CRYPTO_LOG_INFO("Error while destroying session!");
+		}
+		/* Zero out the whole structure */
 		memset(sess, 0, sizeof(struct mrvl_crypto_session));
+	}
 }
 
 struct rte_cryptodev_ops mrvl_crypto_pmd_ops = {
