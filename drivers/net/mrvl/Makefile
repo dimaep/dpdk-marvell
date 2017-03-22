@@ -1,6 +1,6 @@
 #   BSD LICENSE
 #
-#   Copyright(c) 2010-2015 Intel Corporation. All rights reserved.
+#   Copyright(c) 2017 Semihalf. All rights reserved.
 #   All rights reserved.
 #
 #   Redistribution and use in source and binary forms, with or without
@@ -31,36 +31,37 @@
 
 include $(RTE_SDK)/mk/rte.vars.mk
 
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_AF_PACKET) += af_packet
-DIRS-$(CONFIG_RTE_LIBRTE_BNX2X_PMD) += bnx2x
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_BOND) += bonding
-DIRS-$(CONFIG_RTE_LIBRTE_CXGBE_PMD) += cxgbe
-DIRS-$(CONFIG_RTE_LIBRTE_E1000_PMD) += e1000
-DIRS-$(CONFIG_RTE_LIBRTE_ENA_PMD) += ena
-DIRS-$(CONFIG_RTE_LIBRTE_ENIC_PMD) += enic
-DIRS-$(CONFIG_RTE_LIBRTE_FM10K_PMD) += fm10k
-DIRS-$(CONFIG_RTE_LIBRTE_I40E_PMD) += i40e
-DIRS-$(CONFIG_RTE_LIBRTE_IXGBE_PMD) += ixgbe
-DIRS-$(CONFIG_RTE_LIBRTE_MLX4_PMD) += mlx4
-DIRS-$(CONFIG_RTE_LIBRTE_MLX5_PMD) += mlx5
-DIRS-$(CONFIG_RTE_LIBRTE_MPIPE_PMD) += mpipe
-DIRS-$(CONFIG_RTE_LIBRTE_MRVL_PMD) += mrvl
-DIRS-$(CONFIG_RTE_LIBRTE_NFP_PMD) += nfp
-DIRS-$(CONFIG_RTE_LIBRTE_BNXT_PMD) += bnxt
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_NULL) += null
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_PCAP) += pcap
-DIRS-$(CONFIG_RTE_LIBRTE_QEDE_PMD) += qede
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_RING) += ring
-DIRS-$(CONFIG_RTE_LIBRTE_SFC_EFX_PMD) += sfc
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_SZEDATA2) += szedata2
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_TAP) += tap
-DIRS-$(CONFIG_RTE_LIBRTE_THUNDERX_NICVF_PMD) += thunderx
-DIRS-$(CONFIG_RTE_LIBRTE_VIRTIO_PMD) += virtio
-DIRS-$(CONFIG_RTE_LIBRTE_VMXNET3_PMD) += vmxnet3
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_XENVIRT) += xenvirt
+ifneq ($(MAKECMDGOALS),clean)
+ifneq ($(MAKECMDGOALS),config)
+ifeq ($(LIBMUSDK_PATH),)
+$(error "Please define LIBMUSDK_PATH environment variable")
+endif
+endif
+endif
 
-ifeq ($(CONFIG_RTE_LIBRTE_VHOST),y)
-DIRS-$(CONFIG_RTE_LIBRTE_PMD_VHOST) += vhost
-endif # $(CONFIG_RTE_LIBRTE_VHOST)
+# library name
+LIB = librte_pmd_mrvl.a
 
-include $(RTE_SDK)/mk/rte.subdir.mk
+# library version
+LIBABIVER := 1
+
+# versioning export map
+EXPORT_MAP := rte_pmd_mrvl_version.map
+
+# external library dependencies
+CFLAGS += -I$(LIBMUSDK_PATH)/include -DMVCONF_ARCH_DMA_ADDR_T_64BIT -DCONF_PP2_BPOOL_COOKIE_SIZE=64
+# TODO why LDLIBS does not work???
+LDFLAGS += -L$(LIBMUSDK_PATH)/lib -lmusdk
+
+# library source files
+SRCS-$(CONFIG_RTE_LIBRTE_MRVL_PMD) += mrvl_ethdev.c
+
+# library dependencies
+DEPDIRS-$(CONFIG_RTE_LIBRTE_MRVL_PMD) += lib/librte_eal
+DEPDIRS-$(CONFIG_RTE_LIBRTE_MRVL_PMD) += lib/librte_ether
+DEPDIRS-$(CONFIG_RTE_LIBRTE_MRVL_PMD) += lib/librte_mempool
+DEPDIRS-$(CONFIG_RTE_LIBRTE_MRVL_PMD) += lib/librte_mbuf
+DEPDIRS-$(CONFIG_RTE_LIBRTE_MRVL_PMD) += lib/librte_net
+DEPDIRS-$(CONFIG_RTE_LIBRTE_MRVL_PMD) += lib/librte_kvargs
+
+include $(RTE_SDK)/mk/rte.lib.mk
