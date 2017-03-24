@@ -52,6 +52,7 @@ static int cryptodev_mrvl_crypto_uninit(const char *name);
 /* Local aliases for supported hashes */
 #define AUTH_SHA1_HMAC		RTE_CRYPTO_AUTH_SHA1_HMAC
 #define AUTH_SHA256_HMAC	RTE_CRYPTO_AUTH_SHA256_HMAC
+#define MRVL_MAX_BURST_SIZE 64
 
 #define BITS2BYTES(x) ((x) >> 3)
 
@@ -419,6 +420,7 @@ mrvl_crypto_prepare_session_parameters(struct rte_cryptodev *dev,
 		"Invalid/unsupported (cipher/auth) parameters");
 		return -EINVAL;
 	}
+	sess->state = MRVL_SESSION_CONFIGURED;
 
 	return 0;
 }
@@ -438,20 +440,127 @@ mrvl_crypto_prepare_session_parameters(struct rte_cryptodev *dev,
 
 /** Enqueue burst */
 static uint16_t
-mrvl_crypto_pmd_enqueue_burst(void *queue_pair __rte_unused,
-		struct rte_crypto_op **ops __rte_unused,
-		uint16_t nb_ops __rte_unused)
+mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
+		struct rte_crypto_op **ops,
+		uint16_t nb_ops)
 {
-	return 0;
+	uint16_t i, to_enq = nb_ops, sent = 0, curr_op = 0;
+	int ret;
+	struct sam_cio_op_params requests[MRVL_MAX_BURST_SIZE];
+	/* DPDK uses single fragment buffers, so we can KISS desscriptors. */
+	struct sam_buf_info src_bd[MRVL_MAX_BURST_SIZE];
+	struct sam_buf_info dst_bd[MRVL_MAX_BURST_SIZE];
+	struct mrvl_crypto_qp *qp = queue_pair;
+	struct sam_cio *cio = qp->cio;
+
+	while (nb_ops > 0) {
+		to_enq = RTE_MIN(nb_ops, MRVL_MAX_BURST_SIZE);
+
+		/* Prepare the burst. */
+		memset(&requests, 0, sizeof (requests[0]) * to_enq);
+		for (i = 0; i < to_enq; ++i) {
+			struct mrvl_crypto_session *session =
+					(struct mrvl_crypto_session *)
+					ops[curr_op]->sym->session->_private;
+
+			if (session->state == MRVL_SESSION_CONFIGURED) {
+				/* Need to start session first */
+				if (sam_session_create(cio,
+						&session->sam_sess_params,
+						&session->sam_sess)) {
+					//TODO:Cleanup & Log?
+					break;
+				}
+				session->state = MRVL_SESSION_STARTED;
+			}
+
+			requests[i].sa = session->sam_sess;
+			requests[i].cookie = &ops[curr_op];
+
+			/* Single buffers only, sorry. */
+			requests[i].num_bufs = 1;
+			requests[i].src = &src_bd[i];
+			src_bd[i].vaddr = ops[curr_op]->sym->m_src->buf_addr;
+			src_bd[i].paddr = ops[curr_op]->sym->m_src->buf_physaddr;
+			requests[i].dst = &dst_bd[i];
+			dst_bd[i].vaddr = ops[curr_op]->sym->m_dst->buf_addr;
+			dst_bd[i].paddr = ops[curr_op]->sym->m_dst->buf_physaddr;
+
+			if (ops[curr_op]->sym->cipher.data.length > 0) {
+				requests[i].cipher_len = ops[curr_op]->sym->cipher.data.length;
+				requests[i].cipher_offset =
+						ops[curr_op]->sym->cipher.data.offset;
+				requests[i].cipher_iv = ops[curr_op]->sym->cipher.iv.data;
+				//cipher_iv_offset = 0;
+			}
+
+			if (ops[curr_op]->sym->auth.data.length > 0) {
+				requests[i].auth_len = ops[curr_op]->sym->auth.data.length;
+				requests[i].auth_offset = ops[curr_op]->sym->auth.data.offset;
+				requests[i].auth_aad = ops[curr_op]->sym->auth.aad.data;
+				//auth_aad_offset = 0
+				//TODO: auth_icv_offset?
+			}
+
+			++curr_op;
+		} /* for (i = 0; i < to_enq;... */
+
+		if (i > 0) {
+			/* Send the burst */
+			ret = sam_cio_enq(cio, requests, &i);
+			if (ret < 0) {
+				// Error handling?
+				break;
+			}
+			nb_ops -= i;
+			sent += i;
+		}
+
+		if (i < to_enq) {
+			/* No room to send more. */
+			break;
+		}
+	} /* while (nb_ops > 0) */
+
+	/* TODO: Update stats? */
+
+	return sent;
 }
 
 /** Dequeue burst */
 static uint16_t
-mrvl_crypto_pmd_dequeue_burst(void *queue_pair __rte_unused,
-		struct rte_crypto_op **ops __rte_unused,
-		uint16_t nb_ops __rte_unused)
+mrvl_crypto_pmd_dequeue_burst(void *queue_pair ,
+		struct rte_crypto_op **ops ,
+		uint16_t nb_ops )
 {
-	return 0;
+	int ret;
+	struct mrvl_crypto_qp *qp = queue_pair;
+	struct sam_cio *cio = qp->cio;
+	struct sam_cio_op_result results[MRVL_MAX_BURST_SIZE];
+	uint16_t i, to_deq, dequeued = 0;
+
+	while (nb_ops > 0) {
+		to_deq = RTE_MIN(nb_ops, MRVL_MAX_BURST_SIZE);
+
+		ret = sam_cio_deq(cio, results, &to_deq);
+		if (ret) {
+			// Error
+			break;
+		}
+
+		/* Unpack results. */
+		for (i = 0; i < to_deq; ++i) {
+			ops[dequeued] = results[i].cookie;
+			ops[dequeued]->status =
+					(results[i].status == SAM_CIO_OK) ?
+							RTE_CRYPTO_OP_STATUS_SUCCESS :
+							RTE_CRYPTO_OP_STATUS_ERROR;
+			dequeued++;
+		}
+
+		nb_ops -= to_deq;
+	}
+	return dequeued;
 }
 
 /** Create the crypto device */

@@ -52,6 +52,7 @@ EXPORT_MAP := rte_mrvl_pmd_version.map
 CFLAGS += -I$(MRVL_CRYPTO_LIB_PATH)
 CFLAGS += -I$(MRVL_CRYPTO_LIB_PATH)/include
 CFLAGS += -I$(MRVL_CRYPTO_LIB_PATH)/include/drivers
+CFLAGS += -DMVCONF_ARCH_DMA_ADDR_T_64BIT
 LDLIBS += -L$(MRVL_CRYPTO_LIB_PATH) -lmusdk
 
 # library source files

@@ -292,14 +292,8 @@ mrvl_crypto_pmd_session_configure(struct rte_cryptodev *dev __rte_unused,
 		MRVL_CRYPTO_LOG_ERR("Failed to configure session parameters.");
 		return NULL;
 	}
-/* To be done later, when first packet arrives for correct qpair.
-	struct mrvl_crypto_session *mrvl_sess =
-			(struct mrvl_crypto_session *) sess;
-	if (sam_session_create(mrvl_sess->dev->cio, &mrvl_sess->sam_sess_params,
-			&mrvl_sess->sam_sess)) {
-		//TODO:Cleanup & Log?
-		return NULL;
-	}*/
+	/* Session initialization is to be done later, when first packet arrives
+	 *  for correct qpair, so we know cio. */
 	return sess;
 }
 

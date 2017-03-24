@@ -91,6 +91,12 @@ enum mrvl_crypto_chain_order {
 	MRVL_CRYPTO_CHAIN_LIST_END = MRVL_CRYPTO_CHAIN_NOT_SUPPORTED
 };
 
+enum mrvl_session_state {
+	MRVL_SESSION_INVALID = 0,
+	MRVL_SESSION_CONFIGURED,
+	MRVL_SESSION_STARTED
+};
+
 /** the auth mode enumerator */
 enum mrvl_crypto_auth_mode {
 	MRVL_CRYPTO_AUTH_AS_AUTH,
@@ -130,6 +136,7 @@ struct mrvl_crypto_qp {
 
 /** Mrvl crypto private session structure */
 struct mrvl_crypto_session {
+	enum mrvl_session_state state;
 	struct sam_session_params sam_sess_params;
 	struct sam_sa *sam_sess;
 	struct rte_cryptodev *dev;
