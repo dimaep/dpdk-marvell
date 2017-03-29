@@ -529,8 +529,8 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 		struct rte_mbuf *mbuf = tx_pkts[i];
 
 		pp2_ppio_outq_desc_reset(&descs[i]);
-		pp2_ppio_outq_desc_set_phys_addr(&descs[i], rte_mbuf_data_dma_addr_default(mbuf));
-		pp2_ppio_outq_desc_set_pkt_offset(&descs[i], MRVL_PKT_EFFEC_OFFS);
+		pp2_ppio_outq_desc_set_phys_addr(&descs[i], rte_pktmbuf_mtophys(mbuf));
+		pp2_ppio_outq_desc_set_pkt_offset(&descs[i], 0);
 		pp2_ppio_outq_desc_set_pkt_len(&descs[i], rte_pktmbuf_pkt_len(mbuf));
 	}
 
@@ -602,8 +602,7 @@ mrvl_eth_dev_create(const char *name)
 	eth_dev->data->mac_addrs = rte_zmalloc("mac_addrs",
 			ETHER_ADDR_LEN * MRVL_MAC_ADDRS_MAX, 0);
 	if (!eth_dev->data->mac_addrs) {
-		RTE_LOG(ERR, PMD, "Failed to space for eth addrs\n",
-			ETHER_ADDR_LEN * MRVL_MAC_ADDRS_MAX);
+		RTE_LOG(ERR, PMD, "Failed to space for eth addrs\n");
 		ret = -ENOMEM;
 		goto out_free_priv;
 	}
@@ -639,6 +638,7 @@ mrvl_eth_dev_destroy(const char *name)
 	priv = eth_dev->data->dev_private;
 	/* cleanup priv before freeing? */
 	rte_free(priv);
+	rte_free(eth_dev->data->mac_addrs);
 	rte_eth_dev_release_port(eth_dev);
 }
 
