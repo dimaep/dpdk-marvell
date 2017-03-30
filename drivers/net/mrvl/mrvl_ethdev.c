@@ -234,7 +234,7 @@ mrvl_dev_set_link_down(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
 
-	dev->data->dev_link.link_status = 0;
+	dev->data->dev_link.link_status = ETH_LINK_DOWN;
 
 	return pp2_ppio_disable(priv->ppio);
 }
@@ -246,9 +246,9 @@ mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 	 * how to get that from musdk? in fact there are apis for this
 	 * stuff but not exported to userland (pp2_gop)
 	 */
-	dev->data->dev_link.link_status = 1;
+	dev->data->dev_link.link_status = ETH_LINK_UP;
 	/* pass this as parameter? */
-	dev->data->dev_link.link_speed = 10;
+	dev->data->dev_link.link_speed = ETH_SPEED_NUM_10G;
 
 	return 0;
 }
