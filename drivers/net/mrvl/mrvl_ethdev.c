@@ -119,6 +119,8 @@ struct mrvl_rxq {
 	int num_missing;
 	int queue_id;
 	int port_id;
+
+	int cksum_enabled;
 };
 
 struct mrvl_txq {
@@ -333,6 +335,14 @@ mrvl_dev_infos_get(struct rte_eth_dev *dev, struct rte_eth_dev_info *info)
 	info->tx_desc_lim.nb_max = MRVL_PP2_TXD_MAX;
 	info->tx_desc_lim.nb_min = MRVL_PP2_TXD_MIN;
 	info->tx_desc_lim.nb_align = MRVL_PP2_TXD_ALIGN;
+
+	info->rx_offload_capa = DEV_RX_OFFLOAD_IPV4_CKSUM |
+				DEV_RX_OFFLOAD_UDP_CKSUM |
+				DEV_RX_OFFLOAD_TCP_CKSUM;
+
+	info->tx_offload_capa = DEV_TX_OFFLOAD_IPV4_CKSUM |
+				DEV_TX_OFFLOAD_UDP_CKSUM |
+				DEV_TX_OFFLOAD_TCP_CKSUM;
 }
 
 static int
@@ -400,6 +410,7 @@ mrvl_rx_queue_setup(struct rte_eth_dev *dev, uint16_t idx, uint16_t desc,
 
 	rxq->priv = priv;
 	rxq->mp = mp;
+	rxq->cksum_enabled = dev->data->dev_conf.rxmode.hw_ip_checksum;
 	rxq->queue_id = idx;
 	rxq->port_id = dev->data->port_id;
 
@@ -482,12 +493,80 @@ static const struct eth_dev_ops mrvl_ops = {
 	.rss_hash_conf_get = NULL,
 };
 
+static uint32_t
+mrvl_desc_to_packet_type_and_offset(struct pp2_ppio_desc *desc,
+				    uint8_t *l3_offset, uint8_t *l4_offset)
+{
+	enum pp2_inq_l3_type l3_type;
+	enum pp2_inq_l4_type l4_type;
+	uint64_t packet_type;
+
+	pp2_ppio_inq_desc_get_l3_info(desc, &l3_type, l3_offset);
+	pp2_ppio_inq_desc_get_l4_info(desc, &l4_type, l4_offset);
+
+	packet_type = RTE_PTYPE_INNER_L2_ETHER;
+
+	switch (l3_type) {
+	case PP2_INQ_L3_TYPE_IPV4_NO_OPTS:
+		packet_type |= RTE_PTYPE_INNER_L3_IPV4;
+		break;
+	case PP2_INQ_L3_TYPE_IPV4_OK:
+		packet_type |= RTE_PTYPE_INNER_L3_IPV4_EXT;
+		break;
+	case PP2_INQ_L3_TYPE_IPV4_TTL_ZERO:
+		packet_type |= RTE_PTYPE_INNER_L3_IPV4_EXT_UNKNOWN;
+		break;
+	case PP2_INQ_L3_TYPE_IPV6_NO_EXT:
+		packet_type |= RTE_PTYPE_INNER_L3_IPV6;
+		break;
+	case PP2_INQ_L3_TYPE_IPV6_EXT:
+		packet_type |= RTE_PTYPE_INNER_L3_IPV6_EXT;
+		break;
+	default:
+		RTE_LOG(WARNING, PMD, "Failed to recognise l3 packet type\n");
+		break;
+	}
+
+	switch (l4_type) {
+	case PP2_INQ_L4_TYPE_TCP:
+		packet_type |= RTE_PTYPE_INNER_L4_TCP;
+		break;
+	case PP2_INQ_L4_TYPE_UDP:
+		packet_type |= RTE_PTYPE_INNER_L4_UDP;
+		break;
+	default:
+		RTE_LOG(WARNING, PMD, "Failed to recognise l4 packet type\n");
+		break;
+	}
+
+	return packet_type;
+}
+
+static uint64_t
+mrvl_desc_to_ol_flags(struct pp2_ppio_desc *desc)
+{
+	enum pp2_inq_desc_status status = pp2_ppio_inq_desc_get_pkt_error(desc);
+
+	if (likely(status == PP2_DESC_ERR_MAC_OK))
+		return PKT_RX_IP_CKSUM_GOOD | PKT_RX_L4_CKSUM_GOOD;
+
+	if (unlikely(status == PP2_DESC_ERR_IPV4_HDR))
+		return PKT_RX_IP_CKSUM_BAD;
+
+	if (unlikely(status == PP2_DESC_ERR_L4_CHECKSUM))
+		return PKT_RX_IP_CKSUM_GOOD | PKT_RX_L4_CKSUM_BAD;
+
+	RTE_LOG(ERR, PMD, "rx packet error: %d\n", status);
+
+	/* return unknown state */
+	return 0;
+}
+
 static uint16_t
 mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 {
 	struct mrvl_rxq *q = rxq;
 	struct pp2_ppio_desc descs[MRVL_MAX_BURST_SIZE];
-	struct rte_mbuf *mbuf;
 	int i, ret;
 
 	if (nb_pkts > MRVL_MAX_BURST_SIZE) {
@@ -503,11 +582,21 @@ mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 	}
 
 	for (i = 0; i < nb_pkts; i++) {
+		struct rte_mbuf *mbuf;
+		uint8_t l3_offset, l4_offset;
+
 		mbuf = (struct rte_mbuf *)pp2_ppio_inq_desc_get_cookie(&descs[i]);
 		mbuf->data_off += MRVL_PKT_EFFEC_OFFS;
 		mbuf->pkt_len = pp2_ppio_inq_desc_get_pkt_len(&descs[i]);
 		mbuf->data_len = mbuf->pkt_len;
 		mbuf->port = q->port_id;
+		mbuf->packet_type = mrvl_desc_to_packet_type_and_offset(&descs[i],
+				&l3_offset, &l4_offset);
+		mbuf->l2_len = l3_offset;
+		mbuf->l3_len = l4_offset - l3_offset;
+
+		if (likely(q->cksum_enabled))
+			mbuf->ol_flags = mrvl_desc_to_ol_flags(&descs[i]);
 
 		rx_pkts[i] = mbuf;
 
@@ -525,6 +614,36 @@ mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 	return nb_pkts;
 }
 
+static int
+mrvl_prepare_proto_info(uint64_t ol_flags, enum pp2_outq_l3_type *l3_type,
+			enum pp2_outq_l4_type *l4_type, int *gen_l3_cksum,
+			int *gen_l4_cksum)
+{
+	if (ol_flags & PKT_TX_IPV4) {
+		*l3_type = PP2_OUTQ_L3_TYPE_IPV4;
+		*gen_l3_cksum = ol_flags & PKT_TX_IP_CKSUM ? 1 : 0;
+	} else if (ol_flags & PKT_TX_IPV6) {
+		*l3_type = PP2_OUTQ_L3_TYPE_IPV6;
+		*gen_l3_cksum = 0;
+	} else {
+		return -1;
+	}
+
+	ol_flags &= PKT_TX_L4_MASK;
+	if (ol_flags == PKT_TX_TCP_CKSUM) {
+		*l4_type = PP2_OUTQ_L4_TYPE_TCP;
+		*gen_l4_cksum = 1;
+	} else if (ol_flags == PKT_TX_UDP_CKSUM) {
+		*l4_type = PP2_OUTQ_L4_TYPE_UDP;
+		*gen_l4_cksum = 1;
+	} else {
+		*l4_type = PP2_OUTQ_L4_TYPE_OTHER;
+		*gen_l4_cksum = 0;
+	}
+
+	return 0;
+}
+
 static uint16_t
 mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 {
@@ -540,11 +659,27 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 
 	for (i = 0; i < nb_pkts; i++) {
 		struct rte_mbuf *mbuf = tx_pkts[i];
+		int gen_l3_cksum, gen_l4_cksum;
+		enum pp2_outq_l3_type l3_type;
+		enum pp2_outq_l4_type l4_type;
 
 		pp2_ppio_outq_desc_reset(&descs[i]);
-		pp2_ppio_outq_desc_set_phys_addr(&descs[i], rte_pktmbuf_mtophys(mbuf));
+		pp2_ppio_outq_desc_set_phys_addr(&descs[i],
+						 rte_pktmbuf_mtophys(mbuf));
 		pp2_ppio_outq_desc_set_pkt_offset(&descs[i], 0);
-		pp2_ppio_outq_desc_set_pkt_len(&descs[i], rte_pktmbuf_pkt_len(mbuf));
+		pp2_ppio_outq_desc_set_pkt_len(&descs[i],
+					       rte_pktmbuf_pkt_len(mbuf));
+
+		ret = mrvl_prepare_proto_info(mbuf->ol_flags, &l3_type,
+					      &l4_type, &gen_l3_cksum,
+					      &gen_l4_cksum);
+		if (ret)
+			continue;
+
+		pp2_ppio_outq_desc_set_proto_info(&descs[i], l3_type, l4_type,
+						  mbuf->l2_len,
+						  mbuf->l2_len + mbuf->l3_len,
+						  gen_l3_cksum, gen_l4_cksum);
 	}
 
 	ret = pp2_ppio_send(q->priv->ppio, q->priv->hif, 0, descs, &nb_pkts);
