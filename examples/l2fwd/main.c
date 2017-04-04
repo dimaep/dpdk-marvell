@@ -710,6 +710,11 @@ main(int argc, char **argv)
 			rte_exit(EXIT_FAILURE, "rte_eth_dev_start:err=%d, port=%u\n",
 				  ret, (unsigned) portid);
 
+		ret = rte_eth_dev_set_link_up(portid);
+		if (ret < 0)
+			rte_exit(EXIT_FAILURE, "rte_eth_dev_set_link_up:err=%d, port=%u\n",
+				ret, portid);
+
 		printf("done: \n");
 
 		rte_eth_promiscuous_enable(portid);
