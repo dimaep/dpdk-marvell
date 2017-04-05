@@ -583,7 +583,7 @@ mrvl_deinit_pp2(void)
 }
 
 static int
-mrvl_eth_dev_create(const char *name)
+mrvl_eth_dev_create(const char *drv_name, const char *name)
 {
 	struct rte_eth_dev *eth_dev;
 	struct mrvl_priv *priv;
@@ -612,6 +612,7 @@ mrvl_eth_dev_create(const char *name)
 
 	eth_dev->rx_pkt_burst = mrvl_rx_pkt_burst;
 	eth_dev->tx_pkt_burst = mrvl_tx_pkt_burst;
+	eth_dev->data->drv_name = drv_name;
 	eth_dev->data->dev_private = priv;
 	eth_dev->dev_ops = &mrvl_ops;
 
@@ -686,7 +687,7 @@ rte_pmd_mrvl_probe(const char *name, const char *params)
 
 	for (i = 0; i < n; i++) {
 		RTE_LOG(INFO, PMD, "Creating %s\n", ifnames[i]);
-		ret = mrvl_eth_dev_create(ifnames[i]);
+		ret = mrvl_eth_dev_create(name, ifnames[i]);
 		if (ret)
 			goto out_cleanup;
 	}
