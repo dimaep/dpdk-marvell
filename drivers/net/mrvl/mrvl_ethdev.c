@@ -102,37 +102,6 @@ mrvl_reserve_bit(int *bitmap, int max)
 }
 
 static int
-mrvl_get_mac_addr(const char *ifname, struct ether_addr *mac)
-{
-	int ret, fd = socket(AF_INET, SOCK_DGRAM, 0);
-	struct ifreq req;
-
-	memset(&req, 0, sizeof(req));
-	strcpy(req.ifr_name, ifname);
-	ret = ioctl(fd, SIOCGIFHWADDR, &req);
-	if (ret)
-		return ret;
-
-	memcpy(mac->addr_bytes, req.ifr_addr.sa_data, ETHER_ADDR_LEN);
-
-	return 0;
-}
-
-static int
-mrvl_set_mac_addr(const char *ifname, struct ether_addr *mac)
-{
-	int fd = socket(AF_INET, SOCK_DGRAM, 0);
-	struct ifreq req;
-
-	memset(&req, 0, sizeof(req));
-	strcpy(req.ifr_name, ifname);
-	memcpy(req.ifr_hwaddr.sa_data, mac->addr_bytes, ETHER_ADDR_LEN);
-	req.ifr_hwaddr.sa_family = ARPHRD_ETHER;
-
-	return ioctl(fd, SIOCSIFHWADDR, &req);
-}
-
-static int
 mrvl_dev_configure(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
@@ -314,10 +283,18 @@ mrvl_mac_addr_add(struct rte_eth_dev *dev, struct ether_addr *mac_addr,
 static void
 mrvl_mac_addr_set(struct rte_eth_dev *dev, struct ether_addr *mac_addr)
 {
+	int fd = socket(AF_INET, SOCK_DGRAM, 0);
 	char buf[ETHER_ADDR_FMT_SIZE];
+	struct ifreq req;
 	int ret;
 
-	ret = mrvl_set_mac_addr(dev->data->name, mac_addr);
+	/* TODO: temporary solution until musdk provides something similar */
+	memset(&req, 0, sizeof(req));
+	strcpy(req.ifr_name, dev->data->name);
+	memcpy(req.ifr_hwaddr.sa_data, mac_addr->addr_bytes, ETHER_ADDR_LEN);
+	req.ifr_hwaddr.sa_family = ARPHRD_ETHER;
+
+	ret = ioctl(fd, SIOCSIFHWADDR, &req);
 	if (ret) {
 		ether_format_addr(buf, sizeof(buf), mac_addr);
 		RTE_LOG(ERR, PMD, "Failed to set mac %s\n", buf);
@@ -596,9 +573,10 @@ mrvl_deinit_pp2(void)
 static int
 mrvl_eth_dev_create(const char *drv_name, const char *name)
 {
+	int ret, fd = socket(AF_INET, SOCK_DGRAM, 0);
 	struct rte_eth_dev *eth_dev;
 	struct mrvl_priv *priv;
-	int ret;
+	struct ifreq req;
 
 	eth_dev = rte_eth_dev_allocate(name);
 	if (!eth_dev)
@@ -618,8 +596,15 @@ mrvl_eth_dev_create(const char *drv_name, const char *name)
 		goto out_free_priv;
 	}
 
-	/* temporary solution until musdk provides something similar */
-	mrvl_get_mac_addr(name, &eth_dev->data->mac_addrs[0]);
+	/* TODO: temporary solution until musdk provides something similar */
+	memset(&req, 0, sizeof(req));
+	strcpy(req.ifr_name, name);
+	ret = ioctl(fd, SIOCGIFHWADDR, &req);
+	if (ret)
+		goto out_free_mac;
+
+	memcpy(eth_dev->data->mac_addrs[0].addr_bytes,
+	       req.ifr_addr.sa_data, ETHER_ADDR_LEN);
 
 	eth_dev->rx_pkt_burst = mrvl_rx_pkt_burst;
 	eth_dev->tx_pkt_burst = mrvl_tx_pkt_burst;
@@ -628,6 +613,8 @@ mrvl_eth_dev_create(const char *drv_name, const char *name)
 	eth_dev->dev_ops = &mrvl_ops;
 
 	return 0;
+out_free_mac:
+	rte_free(eth_dev->data->mac_addrs);
 out_free_dev:
 	rte_eth_dev_release_port(eth_dev);
 out_free_priv:
