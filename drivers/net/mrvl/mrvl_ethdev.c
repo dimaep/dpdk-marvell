@@ -397,7 +397,7 @@ mrvl_fill_bpool(struct mrvl_rxq *rxq)
 				 &buff_inf);
 	if (unlikely(ret)) {
 		RTE_LOG(ERR, PMD, "Failed to release buffer to bm\n");
-		ret = -ENOBUFS;
+		ret = -EFAULT;
 		goto out_free_mbuf;
 	}
 
