@@ -352,8 +352,10 @@ mrvl_fill_bpool(struct mrvl_rxq *rxq)
 		rxq->priv->dma_addr_high = dma_addr >> 32;
 
 	/* all BPPEs must be located in the same 4GB address space */
-	if (unlikely(rxq->priv->dma_addr_high != dma_addr >> 32))
-		return -EFAULT;
+	if (unlikely(rxq->priv->dma_addr_high != dma_addr >> 32)) {
+		ret = -EFAULT;
+		goto out_free_mbuf;
+	}
 
 	buff_inf.addr = dma_addr;
 	buff_inf.cookie = (pp2_cookie_t)mbuf;
@@ -362,10 +364,15 @@ mrvl_fill_bpool(struct mrvl_rxq *rxq)
 				 &buff_inf);
 	if (unlikely(ret)) {
 		RTE_LOG(ERR, PMD, "Failed to release buffer to bm\n");
-		return -ENOBUFS;
+		ret = -ENOBUFS;
+		goto out_free_mbuf;
 	}
 
 	return 0;
+out_free_mbuf:
+	rte_pktmbuf_free(mbuf);
+
+	return ret;
 }
 
 static int
