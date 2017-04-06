@@ -223,7 +223,7 @@ static int
 mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 {
 	/*
-	 * how to get that from musdk? in fact there are apis for this
+	 * TODO: how to get that from musdk? in fact there are apis for this
 	 * stuff but not exported to userland (pp2_gop)
 	 */
 	dev->data->dev_link.link_status = ETH_LINK_UP;
@@ -500,7 +500,7 @@ mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 
 		rx_pkts[i] = mbuf;
 
-		/* what if it fails? */
+		/* TODO: what if it fails? */
 		mrvl_fill_bpool(q);
 	}
 
@@ -545,7 +545,7 @@ mrvl_init_pp2(void)
 	int ret, num_inst = pp2_get_num_inst();
 	struct pp2_init_params init_params;
 
-	/* Get this from DTS? */
+	/* TODO: Get this from DTS? */
 	memset(&init_params, 0, sizeof(init_params));
 	init_params.hif_reserved_map = MRVL_MUSDK_HIFS_RESERVED;
 	init_params.bm_pool_reserved_map = MRVL_MUSDK_BPOOLS_RESERVED;
@@ -642,7 +642,7 @@ mrvl_eth_dev_destroy(const char *name)
 		return;
 
 	priv = eth_dev->data->dev_private;
-	/* cleanup priv before freeing? */
+	/* TODO: cleanup priv before freeing? */
 	rte_free(priv);
 	rte_free(eth_dev->data->mac_addrs);
 	rte_eth_dev_release_port(eth_dev);
