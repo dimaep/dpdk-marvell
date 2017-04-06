@@ -578,7 +578,11 @@ mrvl_init_pp2(void)
 	int ret, num_inst = pp2_get_num_inst();
 	struct pp2_init_params init_params;
 
-	/* TODO: Get this from DTS? */
+	/*
+	 * TODO: This will be changed to enable detected ports
+	 * automatically. 8040 SoCs have maximum 2 instances of
+	 * packet processor so following conditions are enough for now.
+	 */
 	memset(&init_params, 0, sizeof(init_params));
 	init_params.hif_reserved_map = MRVL_MUSDK_HIFS_RESERVED;
 	init_params.bm_pool_reserved_map = MRVL_MUSDK_BPOOLS_RESERVED;
