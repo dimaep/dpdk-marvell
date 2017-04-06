@@ -598,7 +598,7 @@ mrvl_eth_dev_create(const char *drv_name, const char *name)
 	eth_dev->data->mac_addrs = rte_zmalloc("mac_addrs",
 			ETHER_ADDR_LEN * MRVL_MAC_ADDRS_MAX, 0);
 	if (!eth_dev->data->mac_addrs) {
-		RTE_LOG(ERR, PMD, "Failed to space for eth addrs\n");
+		RTE_LOG(ERR, PMD, "Failed to allocate space for eth addrs\n");
 		ret = -ENOMEM;
 		goto out_free_priv;
 	}
