@@ -113,6 +113,7 @@ struct mrvl_priv {
 struct mrvl_rxq {
 	struct mrvl_priv *priv;
 	struct rte_mempool *mp;
+	int num_missing;
 	int queue_id;
 	int port_id;
 };
@@ -533,8 +534,15 @@ mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 
 		rx_pkts[i] = mbuf;
 
-		/* TODO: what if it fails? */
-		mrvl_fill_bpool(q);
+		q->num_missing++;
+	}
+
+	while (q->num_missing) {
+		ret = mrvl_fill_bpool(q);
+		if (ret)
+			break;
+
+		q->num_missing--;
 	}
 
 	return nb_pkts;
