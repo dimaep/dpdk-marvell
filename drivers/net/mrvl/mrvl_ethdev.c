@@ -223,20 +223,31 @@ static int
 mrvl_dev_set_link_up(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
+	int ret;
 
-	dev->data->dev_link.link_status = 1;
+	ret = pp2_ppio_enable(priv->ppio);
+	if (ret)
+		return ret;
 
-	return pp2_ppio_enable(priv->ppio);
+	dev->data->dev_link.link_status = ETH_LINK_UP;
+
+	return 0;
 }
 
 static int
 mrvl_dev_set_link_down(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
+	int ret;
+
+
+	ret = pp2_ppio_disable(priv->ppio);
+	if (ret)
+		return ret;
 
 	dev->data->dev_link.link_status = ETH_LINK_DOWN;
 
-	return pp2_ppio_disable(priv->ppio);
+	return 0;
 }
 
 static int
