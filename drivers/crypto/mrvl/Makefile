@@ -29,14 +29,14 @@ include $(RTE_SDK)/mk/rte.vars.mk
 
 ifneq ($(MAKECMDGOALS),clean)
 ifneq ($(MAKECMDGOALS),config)
-ifeq ($(MRVL_CRYPTO_LIB_PATH),)
-$(error "Please define MRVL_CRYPTO_LIB_PATH environment variable")
+ifeq ($(LIBMUSDK_PATH),)
+$(error "Please define LIBMUSDK_PATH environment variable")
 endif
 endif
 endif
 
 # library name
-LIB = librte_pmd_mrvl.a
+LIB = librte_pmd_mrvl_crypto.a
 
 # build flags
 CFLAGS += -O3
@@ -49,11 +49,11 @@ LIBABIVER := 1
 EXPORT_MAP := rte_mrvl_pmd_version.map
 
 # external library dependencies
-CFLAGS += -I$(MRVL_CRYPTO_LIB_PATH)
-CFLAGS += -I$(MRVL_CRYPTO_LIB_PATH)/include
-CFLAGS += -I$(MRVL_CRYPTO_LIB_PATH)/include/drivers
+CFLAGS += -I$(LIBMUSDK_PATH)
+CFLAGS += -I$(LIBMUSDK_PATH)/include
+CFLAGS += -I$(LIBMUSDK_PATH)/include/drivers
 CFLAGS += -DMVCONF_ARCH_DMA_ADDR_T_64BIT
-LDLIBS += -L$(MRVL_CRYPTO_LIB_PATH) -lmusdk
+LDLIBS += -L$(LIBMUSDK_PATH) -lmusdk
 
 # library source files
 SRCS-$(CONFIG_RTE_LIBRTE_PMD_MRVL_CRYPTO) += rte_mrvl_pmd.c

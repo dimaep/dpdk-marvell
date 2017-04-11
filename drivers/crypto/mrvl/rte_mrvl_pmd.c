@@ -509,6 +509,9 @@ mrvl_request_prepare(struct sam_cio_op_params *request,
 	data_offset = RTE_PTR_DIFF(dst_bd->vaddr, op->sym->m_dst->buf_addr);
 	dst_bd->paddr = op->sym->m_dst->buf_physaddr + data_offset;
 	dst_bd->len = op->sym->m_dst->buf_len - data_offset;
+	request->cipher_iv = op->sym->cipher.iv.data;
+	request->auth_aad = op->sym->auth.aad.data;
+	/* There's no use for  */
 
 	if (op->sym->cipher.data.length > 0) {
 		request->cipher_len = op->sym->cipher.data.length;
@@ -548,13 +551,21 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 	 * SAM does not store bd pointers, so on-stack scope will be enough. */
 	struct sam_buf_info src_bd[MRVL_MAX_BURST_SIZE];
 	struct sam_buf_info dst_bd[MRVL_MAX_BURST_SIZE];
-	struct mrvl_crypto_qp *qp = queue_pair;
+	struct mrvl_crypto_qp *qp = (struct mrvl_crypto_qp *) queue_pair;
 
+	/* PMD burst size is limited by MRVL_MAX_BURST_SIZE. However we may
+	 * receive larger burst requests from DPDK application. We can handle them
+	 * in two ways:
+	 * 1) Fail burst (ugly!)
+	 * 2) Transparently divide burst to sub-bursts of MRVL_MAX_BURST_SIZE
+	 *    and try to send all packets. */
 	while (nb_ops > 0) {
 		to_enq = RTE_MIN(nb_ops, MRVL_MAX_BURST_SIZE);
 
-		/* Prepare the burst. */
+		/* Prepare the sub-burst. */
 		memset(&requests, 0, sizeof (requests[0]) * to_enq);
+
+		/* Iterate through */
 		for (i = 0; i < to_enq; ++i, ++curr_op) {
 			ret = mrvl_request_prepare(&requests[i], &src_bd[i], &dst_bd[i],
 					ops[curr_op], qp);
@@ -603,13 +614,14 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 		}
 
 		if (i < to_enq) {
-			/* No room to send more. Correct state of the rest of requests. */
+			/* No room to send more. Correct the state of the rest of requests. */
 			for (; i < to_enq; ++i) {
 				--curr_op;
 				if (ops[curr_op]->status == RTE_CRYPTO_OP_STATUS_ENQUEUED) {
 					ops[curr_op]->status = RTE_CRYPTO_OP_STATUS_NOT_PROCESSED;
 					continue;
 				}
+
 				/* Error state ops were never set to be enqueued,
 				 * we must go one op further. */
 				++to_enq;
@@ -617,7 +629,6 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 
 			break;
 		}
-
 
 	} /* while (nb_ops > 0) */
 
@@ -721,7 +732,7 @@ init_error:
 	return -EFAULT;
 }
 
-/** Initialise the crypto device. */
+/** Initialize the crypto device. */
 static int
 cryptodev_mrvl_crypto_init(const char *name,
 		const char *input_args)
@@ -749,7 +760,7 @@ cryptodev_mrvl_crypto_init(const char *name,
 	return cryptodev_mrvl_crypto_create(&init_params);
 }
 
-/** Uninitialise the crypto device */
+/** Uninitialize the crypto device */
 static int
 cryptodev_mrvl_crypto_uninit(const char *name)
 {
