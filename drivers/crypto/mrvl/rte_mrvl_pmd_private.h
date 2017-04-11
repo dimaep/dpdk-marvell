@@ -142,6 +142,17 @@ struct mrvl_crypto_session {
 	struct rte_cryptodev *dev;
 	uint8_t key[256];
 
+	struct {
+		uint8_t i_key_pad[SHA_BLOCK_MAX]
+					__rte_cache_aligned;
+		/**< inner pad (max supported block length) */
+		uint8_t o_key_pad[SHA_BLOCK_MAX]
+					__rte_cache_aligned;
+		/**< outer pad (max supported block length) */
+		uint8_t key[SHA_AUTH_KEY_MAX];
+		/**< HMAC key (max supported length)*/
+	} auth_hmac;
+
 #if 0
 	enum mrvl_crypto_chain_order chain_order;	/**< chain order mode */
 
@@ -172,16 +183,6 @@ struct mrvl_crypto_session {
 				/* Add data if needed */
 			} auth;
 
-			struct {
-				uint8_t i_key_pad[SHA_BLOCK_MAX]
-							__rte_cache_aligned;
-				/**< inner pad (max supported block length) */
-				uint8_t o_key_pad[SHA_BLOCK_MAX]
-							__rte_cache_aligned;
-				/**< outer pad (max supported block length) */
-				uint8_t key[SHA_AUTH_KEY_MAX];
-				/**< HMAC key (max supported length)*/
-			} hmac;
 		};
 	} auth;
 #endif
@@ -196,28 +197,4 @@ extern int mrvl_crypto_prepare_session_parameters(
 
 extern struct rte_cryptodev_ops *rte_mrvl_crypto_pmd_ops;
 
-#if 0 /* Not needed yet */
-
-
-/** the cipher operation enumerator */
-enum mrvl_crypto_cipher_operation {
-	MRVL_CRYPTO_CIPHER_OP_ENCRYPT = RTE_CRYPTO_CIPHER_OP_ENCRYPT,
-	MRVL_CRYPTO_CIPHER_OP_DECRYPT = RTE_CRYPTO_CIPHER_OP_DECRYPT,
-	MRVL_CRYPTO_CIPHER_OP_NOT_SUPPORTED,
-	MRVL_CRYPTO_CIPHER_OP_LIST_END = MRVL_CRYPTO_CIPHER_OP_NOT_SUPPORTED
-};
-
-
-
-#define CRYPTO_ORDER_MAX			MRVL_CRYPTO_CHAIN_LIST_END
-#define CRYPTO_CIPHER_OP_MAX		MRVL_CRYPTO_CIPHER_OP_LIST_END
-#define CRYPTO_CIPHER_KEYLEN_MAX	MRVL_CRYPTO_CIPHER_KEYLEN_LIST_END
-#define CRYPTO_CIPHER_MAX			RTE_CRYPTO_CIPHER_LIST_END
-#define CRYPTO_AUTH_MAX				RTE_CRYPTO_AUTH_LIST_END
-
-
-
-
-
-#endif
 #endif /* _RTE_MRVL_PMD_PRIVATE_H_ */

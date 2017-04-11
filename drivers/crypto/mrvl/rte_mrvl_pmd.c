@@ -64,6 +64,11 @@ enum algo_supported {
 	ALGO_SUPPORTED = 1,
 };
 
+enum request_status {
+	STATUS_OK = 0,
+	STATUS_SESSION_ERROR = -1,
+	STATUS_NOBUFS = -ENOBUFS,
+};
 struct cipher_params_mapping {
 	enum algo_supported  supported;
 	enum sam_cipher_alg  cipher_alg;	/**< cipher algorithm */
@@ -84,34 +89,60 @@ static const
 struct cipher_params_mapping cipher_map[RTE_CRYPTO_CIPHER_LIST_END] = {
 	[RTE_CRYPTO_CIPHER_3DES_CBC] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_3DES,
-		.cipher_mode = SAM_CIPHER_CBC,
+		.cipher_alg = SAM_CIPHER_3DES,	.cipher_mode = SAM_CIPHER_CBC,
 		.max_key_len = BITS2BYTES(192) },
 	[RTE_CRYPTO_CIPHER_3DES_CTR] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_3DES,
-		.cipher_mode = SAM_CIPHER_CTR,
+		.cipher_alg = SAM_CIPHER_3DES,	.cipher_mode = SAM_CIPHER_CTR,
 		.max_key_len = BITS2BYTES(192) },
 	[RTE_CRYPTO_CIPHER_3DES_ECB] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_3DES,
-		.cipher_mode = SAM_CIPHER_ECB,
+		.cipher_alg = SAM_CIPHER_3DES,	.cipher_mode = SAM_CIPHER_ECB,
 		.max_key_len = BITS2BYTES(192) },
 	[RTE_CRYPTO_CIPHER_AES_CBC] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_AES,
-		.cipher_mode = SAM_CIPHER_CBC,
+		.cipher_alg = SAM_CIPHER_AES,	.cipher_mode = SAM_CIPHER_CBC,
+		.max_key_len = BITS2BYTES(256) },
+	[RTE_CRYPTO_CIPHER_AES_GCM] = {
+		.supported = ALGO_SUPPORTED,
+		.cipher_alg = SAM_CIPHER_AES,	.cipher_mode = SAM_CIPHER_GCM,
+		.max_key_len = BITS2BYTES(256) },
+	[RTE_CRYPTO_CIPHER_AES_CTR] = {
+		.supported = ALGO_SUPPORTED,
+		.cipher_alg = SAM_CIPHER_AES,	.cipher_mode = SAM_CIPHER_CTR,
 		.max_key_len = BITS2BYTES(256) },
 };
 
 static const
 struct auth_params_mapping auth_map[RTE_CRYPTO_AUTH_LIST_END] = {
+	[RTE_CRYPTO_AUTH_MD5_HMAC] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_MD5},
 	[RTE_CRYPTO_AUTH_MD5] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_MD5},
 	[RTE_CRYPTO_AUTH_SHA1_HMAC] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA1},
+	[RTE_CRYPTO_AUTH_SHA1] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA1},
+	[RTE_CRYPTO_AUTH_SHA224_HMAC] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_224},
+	[RTE_CRYPTO_AUTH_SHA224] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_224},
 	[RTE_CRYPTO_AUTH_SHA256_HMAC] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_256},
+	[RTE_CRYPTO_AUTH_SHA256] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_256},
+	[RTE_CRYPTO_AUTH_SHA384_HMAC] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_384},
+	[RTE_CRYPTO_AUTH_SHA384] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_384},
+	[RTE_CRYPTO_AUTH_SHA512_HMAC] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_512},
+	[RTE_CRYPTO_AUTH_SHA512] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_512},
+	[RTE_CRYPTO_AUTH_AES_GCM] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_AES_GCM},
+	[RTE_CRYPTO_AUTH_AES_GMAC] = {
+		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_AES_GMAC},
 };
 /*
  *------------------------------------------------------------------------------
@@ -146,8 +177,6 @@ mrvl_crypto_get_chain_order(const struct rte_crypto_sym_xform *xform)
 	return MRVL_CRYPTO_CHAIN_NOT_SUPPORTED;
 }
 
-#if 0
-// To be completed along with particular algorithms.
 static inline void
 auth_hmac_pad_prepare(struct mrvl_crypto_session *sess,
 				const struct rte_crypto_sym_xform *xform)
@@ -155,11 +184,11 @@ auth_hmac_pad_prepare(struct mrvl_crypto_session *sess,
 	size_t i;
 
 	/* Generate i_key_pad and o_key_pad */
-	memset(sess->auth.hmac.i_key_pad, 0, sizeof(sess->auth.hmac.i_key_pad));
-	rte_memcpy(sess->auth.hmac.i_key_pad, sess->auth.hmac.key,
+	memset(sess->auth_hmac.i_key_pad, 0, sizeof(sess->auth_hmac.i_key_pad));
+	rte_memcpy(sess->auth_hmac.i_key_pad, sess->auth_hmac.key,
 							xform->auth.key.length);
-	memset(sess->auth.hmac.o_key_pad, 0, sizeof(sess->auth.hmac.o_key_pad));
-	rte_memcpy(sess->auth.hmac.o_key_pad, sess->auth.hmac.key,
+	memset(sess->auth_hmac.o_key_pad, 0, sizeof(sess->auth_hmac.o_key_pad));
+	rte_memcpy(sess->auth_hmac.o_key_pad, sess->auth_hmac.key,
 							xform->auth.key.length);
 	/*
 	 * XOR key with IPAD/OPAD values to obtain i_key_pad
@@ -171,21 +200,20 @@ auth_hmac_pad_prepare(struct mrvl_crypto_session *sess,
 	 * elements of Qy, eor 128 bits at once).
 	 */
 	for (i = 0; i < SHA_BLOCK_MAX; i++) {
-		sess->auth.hmac.i_key_pad[i] ^= HMAC_IPAD_VALUE;
-		sess->auth.hmac.o_key_pad[i] ^= HMAC_OPAD_VALUE;
+		sess->auth_hmac.i_key_pad[i] ^= HMAC_IPAD_VALUE;
+		sess->auth_hmac.o_key_pad[i] ^= HMAC_OPAD_VALUE;
 	}
 }
-#endif
 
 static inline int
 auth_set_prerequisites(struct mrvl_crypto_session *sess __rte_unused,
 			const struct rte_crypto_sym_xform *xform __rte_unused)
 {
-#if 0
 // To be completed along with particular algorithms.
 	uint8_t partial[64] = { 0 };
 
 	switch (xform->auth.algo) {
+#if 0
 	case RTE_CRYPTO_AUTH_SHA1_HMAC:
 		/*
 		 * Generate authentication key, i_key_pad and o_key_pad.
@@ -216,24 +244,25 @@ auth_set_prerequisites(struct mrvl_crypto_session *sess __rte_unused,
 		 * Calculate partial hash values for i_key_pad and o_key_pad.
 		 * Will be used as initialization state for final HMAC.
 		 */
-		memcpy(sess->auth.hmac.i_key_pad, partial, SHA1_BLOCK_SIZE);
+		memcpy(sess->auth_hmac.i_key_pad, partial, SHA1_BLOCK_SIZE);
 
-		memcpy(sess->auth.hmac.o_key_pad, partial, SHA1_BLOCK_SIZE);
+		memcpy(sess->auth_hmac.o_key_pad, partial, SHA1_BLOCK_SIZE);
 
 		break;
+#endif
 	case RTE_CRYPTO_AUTH_SHA256_HMAC:
 		/*
 		 * Generate authentication key, i_key_pad and o_key_pad.
 		 */
 		/* Zero memory under key */
-		memset(sess->auth.hmac.key, 0, SHA256_AUTH_KEY_LENGTH);
+		memset(sess->auth_hmac.key, 0, SHA256_AUTH_KEY_LENGTH);
 
 		if (xform->auth.key.length > SHA256_AUTH_KEY_LENGTH) {
 			/*
 			 * In case the key is longer than 256 bits
 			 * the algorithm will use SHA256(key) instead.
 			 */
-			;
+			return -1;
 		} else {
 			/*
 			 * Now copy the given authentication key to the session
@@ -241,7 +270,8 @@ auth_set_prerequisites(struct mrvl_crypto_session *sess __rte_unused,
 			 * no need for additional zero padding if the key is
 			 * shorter than SHA256_AUTH_KEY_LENGTH.
 			 */
-			;
+			rte_memcpy(sess->auth_hmac.key, xform->auth.key.data,
+										xform->auth.key.length);
 		}
 
 		/* Prepare HMAC padding: key|pattern */
@@ -250,15 +280,14 @@ auth_set_prerequisites(struct mrvl_crypto_session *sess __rte_unused,
 		 * Calculate partial hash values for i_key_pad and o_key_pad.
 		 * Will be used as initialization state for final HMAC.
 		 */
-		memcpy(sess->auth.hmac.i_key_pad, partial, SHA256_BLOCK_SIZE);
+		memcpy(sess->auth_hmac.i_key_pad, partial, SHA256_BLOCK_SIZE);
 
-		memcpy(sess->auth.hmac.o_key_pad, partial, SHA256_BLOCK_SIZE);
+		memcpy(sess->auth_hmac.o_key_pad, partial, SHA256_BLOCK_SIZE);
 
 		break;
 	default:
 		break;
 	}
-#endif
 
 	return 0;
 }
@@ -330,7 +359,7 @@ mrvl_crypto_set_auth_session_parameters(struct mrvl_crypto_session *sess,
 	}
 	/* See if map data is present and valid */
 	if ((auth_xform->auth.algo > RTE_DIM(auth_map)) ||
-		(cipher_map[auth_xform->auth.algo].supported != ALGO_SUPPORTED)) {
+		(auth_map[auth_xform->auth.algo].supported != ALGO_SUPPORTED)) {
 		MRVL_CRYPTO_LOG_ERR("Auth algorithm not supported!");
 		return -EINVAL;
 	}
@@ -339,6 +368,9 @@ mrvl_crypto_set_auth_session_parameters(struct mrvl_crypto_session *sess,
 	sess->sam_sess_params.auth_aad_len =
 		auth_xform->auth.add_auth_data_length;
 	sess->sam_sess_params.auth_icv_len = auth_xform->auth.digest_length;
+	sess->sam_sess_params.auth_inner = sess->auth_hmac.i_key_pad;
+	sess->sam_sess_params.auth_outer = sess->auth_hmac.o_key_pad;
+
 	return 0;
 }
 
@@ -425,13 +457,78 @@ mrvl_crypto_prepare_session_parameters(struct rte_cryptodev *dev,
 	return 0;
 }
 
-
 /*
  *------------------------------------------------------------------------------
  * Process Operations
  *------------------------------------------------------------------------------
  */
+static inline enum request_status
+mrvl_request_prepare(struct sam_cio_op_params *request,
+		struct sam_buf_info *src_bd,
+		struct sam_buf_info *dst_bd,
+		struct rte_crypto_op *op,
+		struct mrvl_crypto_qp *qp)
+{
+	struct mrvl_crypto_session *session =
+			(struct mrvl_crypto_session *) op->sym->session->_private;
+	uint64_t data_offset;
 
+	if (session->state == MRVL_SESSION_CONFIGURED) {
+		/* Need to start session first */
+		if (sam_session_create(qp->cio,
+				&session->sam_sess_params,
+				&session->sam_sess)) {
+			/* We're using Dbg here to make sure function is inlined. */
+			MRVL_CRYPTO_LOG_DBG("Failed to start session!");
+			return STATUS_SESSION_ERROR;
+		}
+		session->state = MRVL_SESSION_STARTED;
+	} else if (session->state != MRVL_SESSION_STARTED) {
+		MRVL_CRYPTO_LOG_DBG("Invalid session state (%d)!", session->state);
+		return STATUS_SESSION_ERROR;
+	}
+
+	/* If application delivered us null dst buffer, it means it expects
+	 * us to deliver the result in src buffer. */
+	if (op->sym->m_dst == NULL) {
+		op->sym->m_dst = op->sym->m_src;
+	}
+
+	request->sa = session->sam_sess;
+	request->cookie = op;
+
+	/* Single buffers only, sorry. */
+	request->num_bufs = 1;
+	request->src = src_bd;
+	src_bd->vaddr = rte_pktmbuf_mtod_offset(op->sym->m_src, void *, 0);
+	data_offset = RTE_PTR_DIFF(src_bd->vaddr, op->sym->m_src->buf_addr);
+	src_bd->paddr = op->sym->m_src->buf_physaddr + data_offset;
+	src_bd->len = op->sym->m_src->buf_len - data_offset;
+	request->dst = dst_bd;
+	dst_bd->vaddr = rte_pktmbuf_mtod_offset(op->sym->m_dst, void *, 0);
+	data_offset = RTE_PTR_DIFF(dst_bd->vaddr, op->sym->m_dst->buf_addr);
+	dst_bd->paddr = op->sym->m_dst->buf_physaddr + data_offset;
+	dst_bd->len = op->sym->m_dst->buf_len - data_offset;
+
+	if (op->sym->cipher.data.length > 0) {
+		request->cipher_len = op->sym->cipher.data.length;
+		request->cipher_offset = op->sym->cipher.data.offset;
+		request->cipher_iv = op->sym->cipher.iv.data;
+		//cipher_iv_offset = 0;
+	}
+
+	if (op->sym->auth.data.length > 0) {
+		request->auth_len = op->sym->auth.data.length;
+		request->auth_offset = op->sym->auth.data.offset;
+		request->auth_aad = op->sym->auth.aad.data;
+		//auth_aad_offset = 0
+		//TODO: auth_icv_offset?
+	}
+
+	/* Assume enqueue will succeed. */
+	op->status = RTE_CRYPTO_OP_STATUS_ENQUEUED;
+	return 0;
+}
 /*
  *------------------------------------------------------------------------------
  * PMD Framework
@@ -444,87 +541,89 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 		struct rte_crypto_op **ops,
 		uint16_t nb_ops)
 {
-	uint16_t i, to_enq = nb_ops, sent = 0, curr_op = 0;
+	uint16_t i, to_enq = nb_ops, handled = 0, curr_op = 0;
 	int ret;
 	struct sam_cio_op_params requests[MRVL_MAX_BURST_SIZE];
-	/* DPDK uses single fragment buffers, so we can KISS desscriptors. */
+	/* DPDK uses single fragment buffers, so we can KISS descriptors.
+	 * SAM does not store bd pointers, so on-stack scope will be enough. */
 	struct sam_buf_info src_bd[MRVL_MAX_BURST_SIZE];
 	struct sam_buf_info dst_bd[MRVL_MAX_BURST_SIZE];
 	struct mrvl_crypto_qp *qp = queue_pair;
-	struct sam_cio *cio = qp->cio;
 
 	while (nb_ops > 0) {
 		to_enq = RTE_MIN(nb_ops, MRVL_MAX_BURST_SIZE);
 
 		/* Prepare the burst. */
 		memset(&requests, 0, sizeof (requests[0]) * to_enq);
-		for (i = 0; i < to_enq; ++i) {
-			struct mrvl_crypto_session *session =
-					(struct mrvl_crypto_session *)
-					ops[curr_op]->sym->session->_private;
-
-			if (session->state == MRVL_SESSION_CONFIGURED) {
-				/* Need to start session first */
-				if (sam_session_create(cio,
-						&session->sam_sess_params,
-						&session->sam_sess)) {
-					//TODO:Cleanup & Log?
+		for (i = 0; i < to_enq; ++i, ++curr_op) {
+			ret = mrvl_request_prepare(&requests[i], &src_bd[i], &dst_bd[i],
+					ops[curr_op], qp);
+			if(ret < 0) {
+				MRVL_CRYPTO_LOG_ERR("Error %d while parameters preparation!",
+						ret);
+				switch(ret) {
+				case STATUS_SESSION_ERROR:
+					ops[curr_op]->status
+						= RTE_CRYPTO_OP_STATUS_INVALID_SESSION;
+					break;
+				case STATUS_NOBUFS:
+					ops[curr_op]->status = RTE_CRYPTO_OP_STATUS_INVALID_ARGS;
+					break;
+				default:
+					ops[curr_op]->status = RTE_CRYPTO_OP_STATUS_ERROR;
 					break;
 				}
-				session->state = MRVL_SESSION_STARTED;
+
+				/* Rollback index to reuse request slot. */
+				--i;
+
+				/* Decrease the number of ops to send.
+				 * This is a bit less optimal, but cleaner solution.*/
+				--to_enq;
+
+				/* Decrease nb_ops to make up for ops lacking after
+				 * sam_cio_enq(). */
+				--nb_ops;
+
+				/* Number of handled ops increases (even if the result
+				 * of handling is error). */
+				++handled;
 			}
-
-			requests[i].sa = session->sam_sess;
-			requests[i].cookie = &ops[curr_op];
-
-			/* Single buffers only, sorry. */
-			requests[i].num_bufs = 1;
-			requests[i].src = &src_bd[i];
-			src_bd[i].vaddr = ops[curr_op]->sym->m_src->buf_addr;
-			src_bd[i].paddr = ops[curr_op]->sym->m_src->buf_physaddr;
-			requests[i].dst = &dst_bd[i];
-			dst_bd[i].vaddr = ops[curr_op]->sym->m_dst->buf_addr;
-			dst_bd[i].paddr = ops[curr_op]->sym->m_dst->buf_physaddr;
-
-			if (ops[curr_op]->sym->cipher.data.length > 0) {
-				requests[i].cipher_len = ops[curr_op]->sym->cipher.data.length;
-				requests[i].cipher_offset =
-						ops[curr_op]->sym->cipher.data.offset;
-				requests[i].cipher_iv = ops[curr_op]->sym->cipher.iv.data;
-				//cipher_iv_offset = 0;
-			}
-
-			if (ops[curr_op]->sym->auth.data.length > 0) {
-				requests[i].auth_len = ops[curr_op]->sym->auth.data.length;
-				requests[i].auth_offset = ops[curr_op]->sym->auth.data.offset;
-				requests[i].auth_aad = ops[curr_op]->sym->auth.aad.data;
-				//auth_aad_offset = 0
-				//TODO: auth_icv_offset?
-			}
-
-			++curr_op;
 		} /* for (i = 0; i < to_enq;... */
 
 		if (i > 0) {
 			/* Send the burst */
-			ret = sam_cio_enq(cio, requests, &i);
+			ret = sam_cio_enq(qp->cio, requests, &i);
 			if (ret < 0) {
 				// Error handling?
 				break;
 			}
 			nb_ops -= i;
-			sent += i;
+			handled += i;
 		}
 
 		if (i < to_enq) {
-			/* No room to send more. */
+			/* No room to send more. Correct state of the rest of requests. */
+			for (; i < to_enq; ++i) {
+				--curr_op;
+				if (ops[curr_op]->status == RTE_CRYPTO_OP_STATUS_ENQUEUED) {
+					ops[curr_op]->status = RTE_CRYPTO_OP_STATUS_NOT_PROCESSED;
+					continue;
+				}
+				/* Error state ops were never set to be enqueued,
+				 * we must go one op further. */
+				++to_enq;
+			}
+
 			break;
 		}
+
+
 	} /* while (nb_ops > 0) */
 
 	/* TODO: Update stats? */
 
-	return sent;
+	return handled;
 }
 
 /** Dequeue burst */
@@ -573,7 +672,7 @@ cryptodev_mrvl_crypto_create(struct rte_crypto_vdev_init_params *init_params)
 
 	if (init_params->name[0] == '\0') {
 		ret = rte_cryptodev_pmd_create_dev_name(
-				init_params->name, "Mrvl");
+				init_params->name, "crypto_mrvl");
 
 		if (ret < 0) {
 			MRVL_CRYPTO_LOG_ERR("failed to create unique name");
@@ -670,7 +769,7 @@ static struct rte_vdev_driver mrvl_crypto_drv = {
 };
 
 RTE_PMD_REGISTER_VDEV(CRYPTODEV_NAME_MRVL_PMD, mrvl_crypto_drv);
-RTE_PMD_REGISTER_ALIAS(CRYPTODEV_NAME_MRVL_PMD, cryptodev_mrvl_pmd);
+RTE_PMD_REGISTER_ALIAS(CRYPTODEV_NAME_MRVL_PMD, crypto_mrvl_pmd);
 RTE_PMD_REGISTER_PARAM_STRING(CRYPTODEV_NAME_MRVL_PMD,
 	"max_nb_queue_pairs=<int> "
 	"max_nb_sessions=<int> "
