@@ -174,7 +174,7 @@ static const struct rte_cryptodev_capabilities
 					.algo = RTE_CRYPTO_AUTH_SHA256_HMAC,
 					.block_size = 64,
 					.key_size = {
-						.min = 16,
+						.min = 1,
 						.max = 128,
 						.increment = 0
 					},
@@ -301,8 +301,8 @@ static const struct rte_cryptodev_capabilities
 					.block_size = 16,
 					.key_size = {
 						.min = 16,
-						.max = 256,
-						.increment = 0
+						.max = 32,
+						.increment = 8
 					},
 					.iv_size = {
 						.min = 16,
@@ -410,9 +410,9 @@ static const struct rte_cryptodev_capabilities
 				.algo = RTE_CRYPTO_CIPHER_3DES_CBC,
 				.block_size = 8,
 				.key_size = {
-					.min = 16,
+					.min = 24,
 					.max = 24,
-					.increment = 8
+					.increment = 0
 				},
 				.iv_size = {
 					.min = 8,
@@ -430,9 +430,9 @@ static const struct rte_cryptodev_capabilities
 				.algo = RTE_CRYPTO_CIPHER_3DES_CTR,
 				.block_size = 8,
 				.key_size = {
-					.min = 16,
+					.min = 24,
 					.max = 24,
-					.increment = 8
+					.increment = 0
 				},
 				.iv_size = {
 					.min = 8,

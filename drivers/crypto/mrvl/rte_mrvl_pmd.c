@@ -206,8 +206,8 @@ auth_hmac_pad_prepare(struct mrvl_crypto_session *sess,
 }
 
 static inline int
-auth_set_prerequisites(struct mrvl_crypto_session *sess __rte_unused,
-			const struct rte_crypto_sym_xform *xform __rte_unused)
+auth_set_prerequisites(struct mrvl_crypto_session *sess,
+			const struct rte_crypto_sym_xform *xform)
 {
 // To be completed along with particular algorithms.
 	uint8_t partial[64] = { 0 };
@@ -406,6 +406,13 @@ mrvl_crypto_set_session_parameters(struct mrvl_crypto_session *sess,
 		(auth_set_prerequisites(sess, auth_xform) != 0))) {
 		return -EINVAL;
 	}
+
+	/* GMAC in DPDK is confiured as cipher-GCM/auth-GMAC, MUSDK requires
+	 * explicit setting of cipher-GMAC */
+	if ((sess->sam_sess_params.cipher_mode == SAM_CIPHER_GCM) &&
+		(sess->sam_sess_params.auth_alg == SAM_AUTH_AES_GMAC)) {
+		sess->sam_sess_params.cipher_mode = SAM_CIPHER_GMAC;
+	}
 	return 0;
 }
 
@@ -438,9 +445,19 @@ mrvl_crypto_prepare_session_parameters(struct rte_cryptodev *dev,
 		break;
 	case MRVL_CRYPTO_CHAIN_CIPHER_ONLY:
 		cipher_xform = xform;
+		if (cipher_xform->cipher.algo == RTE_CRYPTO_CIPHER_AES_GCM) {
+			MRVL_CRYPTO_LOG_ERR(
+					"AES GCM/GMAC requires configured authentication!");
+			return -EINVAL;
+		}
 		break;
 	case MRVL_CRYPTO_CHAIN_AUTH_ONLY:
 		auth_xform = xform;
+		if ((auth_xform->auth.algo == RTE_CRYPTO_AUTH_AES_GCM) ||
+				(auth_xform->auth.algo == RTE_CRYPTO_AUTH_AES_GMAC)) {
+			MRVL_CRYPTO_LOG_ERR("AES GCM/GMAC requires configured cipher!");
+			return -EINVAL;
+		}
 		break;
 	default:
 		return -EINVAL;
@@ -647,10 +664,10 @@ mrvl_crypto_pmd_dequeue_burst(void *queue_pair ,
 	struct mrvl_crypto_qp *qp = queue_pair;
 	struct sam_cio *cio = qp->cio;
 	struct sam_cio_op_result results[MRVL_MAX_BURST_SIZE];
-	uint16_t i, to_deq, dequeued = 0;
+	uint16_t i, to_deq, tgt_ops, dequeued_total = 0;
 
 	while (nb_ops > 0) {
-		to_deq = RTE_MIN(nb_ops, MRVL_MAX_BURST_SIZE);
+		to_deq = tgt_ops = RTE_MIN(nb_ops, MRVL_MAX_BURST_SIZE);
 
 		ret = sam_cio_deq(cio, results, &to_deq);
 		if (ret) {
@@ -660,17 +677,22 @@ mrvl_crypto_pmd_dequeue_burst(void *queue_pair ,
 
 		/* Unpack results. */
 		for (i = 0; i < to_deq; ++i) {
-			ops[dequeued] = results[i].cookie;
-			ops[dequeued]->status =
+			ops[dequeued_total] = results[i].cookie;
+			ops[dequeued_total]->status =
 					(results[i].status == SAM_CIO_OK) ?
 							RTE_CRYPTO_OP_STATUS_SUCCESS :
 							RTE_CRYPTO_OP_STATUS_ERROR;
-			dequeued++;
+			dequeued_total++;
 		}
 
 		nb_ops -= to_deq;
+
+		if (to_deq < tgt_ops) {
+			/* SAM returned less than asked, probably no more to dequeue. */
+			break;
+		}
 	}
-	return dequeued;
+	return dequeued_total;
 }
 
 /** Create the crypto device */

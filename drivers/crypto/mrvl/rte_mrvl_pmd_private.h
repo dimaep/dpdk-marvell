@@ -71,6 +71,9 @@ do {								\
 #define NBBY		8		/* Number of bits in a byte */
 #define BYTE_LENGTH(x)	((x) / NBBY) /* Number of bytes in x (round down) */
 
+#define SHA512_AUTH_KEY_LENGTH		(BYTE_LENGTH(512))
+#define SHA256_BLOCK_SIZE			(BYTE_LENGTH(512))
+
 #define SHA256_AUTH_KEY_LENGTH		(BYTE_LENGTH(256))
 #define SHA256_BLOCK_SIZE			(BYTE_LENGTH(512))
 
