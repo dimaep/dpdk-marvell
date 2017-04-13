@@ -43,10 +43,13 @@
 #include <drivers/mv_pp2_ppio.h>
 
 #include <assert.h>
+#include <fcntl.h>
 #include <net/if.h>
 #include <net/if_arp.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 /* bitmask with reserved hifs */
 #define MRVL_MUSDK_HIFS_RESERVED 0x0F
@@ -557,34 +560,40 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 static int
 mrvl_init_pp2(void)
 {
-	int ret, num_inst = pp2_get_num_inst();
+	const char *const cpn_nodes[] = { "cpn-110-master", "cpn-110-slave" };
+	const char *path = "/proc/device-tree/%s/config-space/ppv22@000000/" \
+			   "eth%d@0%d0000/status";
 	struct pp2_init_params init_params;
+	int i, j, ret, len, fd;
+	char buf[256];
 
-	/*
-	 * TODO: This will be changed to enable detected ports
-	 * automatically. 8040 SoCs have maximum 2 instances of
-	 * packet processor so following conditions are enough for now.
-	 */
 	memset(&init_params, 0, sizeof(init_params));
 	init_params.hif_reserved_map = MRVL_MUSDK_HIFS_RESERVED;
 	init_params.bm_pool_reserved_map = MRVL_MUSDK_BPOOLS_RESERVED;
 
-	/* Enable 10G port */
-	init_params.ppios[0][0].is_enabled = 1;
-	init_params.ppios[0][0].first_inq = 0;
+	for (i = 0; i < pp2_get_num_inst() && i < RTE_DIM(cpn_nodes); i++) {
+		for (j = 0; j < MRVL_PP2_PORTS_MAX; j++) {
+			snprintf(buf, sizeof(buf), path, cpn_nodes[i], j, j + 1);
 
-	if (num_inst == 1) {
-		init_params.ppios[0][2].is_enabled = 1;
-		init_params.ppios[0][2].first_inq = 0;
-	}
-	if (num_inst == 2) {
-		/* Enable 10G port */
-		init_params.ppios[1][0].is_enabled = 1;
-		init_params.ppios[1][0].first_inq = 0;
+			fd = open(buf, O_RDONLY);
+			if (fd < 0) {
+				RTE_LOG(WARNING, PMD, "Failed to read %s\n", buf);
+				continue;
+			}
 
-		/* Enable 1G ports */
-		init_params.ppios[1][1].is_enabled = 1;
-		init_params.ppios[1][1].first_inq = 0;
+			len = lseek(fd, 0, SEEK_END);
+			lseek(fd, 0, SEEK_SET);
+
+			read(fd, buf, len);
+			buf[len] = '\0';
+
+			if (!strcmp(buf, "non-kernel")) {
+				init_params.ppios[i][j].is_enabled = 1;
+				init_params.ppios[i][j].first_inq = 0;
+			}
+
+			close(fd);
+		}
 	}
 
 	return pp2_init(&init_params);
