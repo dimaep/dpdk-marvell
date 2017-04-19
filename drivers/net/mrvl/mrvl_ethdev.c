@@ -121,11 +121,19 @@ struct mrvl_shadow_txq {
 	struct pp2_buff_inf infs[MRVL_PP2_TXD_MAX];
 };
 
+struct mrvl_rxq;
+struct mrvl_txq;
+
 struct mrvl_priv {
 	struct pp2_hif *hif;
 	struct pp2_bpool *bpool;
 	struct pp2_ppio	*ppio;
 	uint32_t dma_addr_high;
+
+	unsigned int nb_rxqs;
+	unsigned int nb_txqs;
+	struct mrvl_rxq *(*rxqs)[];
+	struct mrvl_txq *(*txqs)[];
 
 	struct pp2_ppio_params ppio_params;
 
@@ -142,12 +150,14 @@ struct mrvl_rxq {
 	int queue_id;
 	int port_id;
 	int cksum_enabled;
+	int bytes_recv;
 };
 
 struct mrvl_txq {
 	struct mrvl_priv *priv;
 	int queue_id;
 	int port_id;
+	int bytes_sent;
 };
 
 /*
@@ -241,6 +251,11 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 				0, rte_socket_id());
 	if (!inq_params)
 		return -ENOMEM;
+
+	priv->nb_rxqs = dev->data->nb_rx_queues;
+	priv->nb_txqs = dev->data->nb_tx_queues;
+	priv->rxqs = (void *)dev->data->rx_queues;
+	priv->txqs = (void *)dev->data->tx_queues;
 
 	priv->ppio_params.inqs_params.tcs_params[0].num_in_qs = dev->data->nb_rx_queues;
 	priv->ppio_params.inqs_params.tcs_params[0].inqs_params = inq_params;
@@ -526,6 +541,100 @@ mrvl_mtu_set(struct rte_eth_dev *dev, uint16_t mtu)
 }
 
 static void
+mrvl_stats_get(struct rte_eth_dev *dev, struct rte_eth_stats *stats)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+	struct pp2_ppio_statistics ppio_stats;
+	unsigned i, idx, ret;
+
+	for (i = 0; i < priv->nb_rxqs; i++) {
+		struct mrvl_rxq *rxq = (*priv->rxqs)[i];
+		struct pp2_ppio_inq_statistics rx_stats;
+
+		if (!rxq)
+			continue;
+
+		idx = rxq->queue_id;
+		if (unlikely(idx >= RTE_ETHDEV_QUEUE_STAT_CNTRS)) {
+			RTE_LOG(ERR, PMD, "rx queue %d stats out of range (0 - %d)\n",
+				idx, RTE_ETHDEV_QUEUE_STAT_CNTRS - 1);
+			continue;
+		}
+
+		ret = pp2_ppio_inq_get_statistics(priv->ppio, 0, idx, &rx_stats, 0);
+		if (unlikely(ret)) {
+			RTE_LOG(ERR, PMD, "Failed to update rx queue %d stats\n", idx);
+			break;
+		}
+
+		stats->q_ibytes[idx] = rxq->bytes_recv;
+		stats->q_ipackets[idx] = rx_stats.enq_desc;
+		/*
+		 * TODO
+		 * Check whether following rx_stats counters qualify as errors
+		 */
+		stats->q_errors[idx] = rx_stats.drop_early +
+				       rx_stats.drop_fullq +
+				       rx_stats.drop_bm;
+		stats->ibytes += rxq->bytes_recv;
+	}
+
+	for (i = 0; i < priv->nb_txqs; i++) {
+		struct mrvl_txq *txq = (*priv->txqs)[i];
+		struct pp2_ppio_outq_statistics tx_stats;
+
+		if (!txq)
+			continue;
+
+		idx = txq->queue_id;
+		if (unlikely(idx >= RTE_ETHDEV_QUEUE_STAT_CNTRS)) {
+			RTE_LOG(ERR, PMD, "tx queue %d stats out of range (0 - %d)\n",
+				idx, RTE_ETHDEV_QUEUE_STAT_CNTRS - 1);
+		}
+
+		ret = pp2_ppio_outq_get_statistics(priv->ppio, idx, &tx_stats, 0);
+		if (unlikely(ret)) {
+			RTE_LOG(ERR, PMD, "Failed to update tx queue %d stats\n", idx);
+			break;
+		}
+
+		stats->q_opackets[idx] = tx_stats.deq_desc;
+		stats->q_obytes[idx] = txq->bytes_sent;
+		stats->obytes += txq->bytes_sent;
+
+	}
+
+	ret = pp2_ppio_get_statistics(priv->ppio, &ppio_stats, 0);
+	if (unlikely(ret)) {
+		RTE_LOG(ERR, PMD, "Failed to update port statistics\n");
+		return;
+	}
+
+	stats->ipackets += ppio_stats.rx_packets;
+	stats->opackets += ppio_stats.tx_packets;
+	stats->imissed += ppio_stats.rx_fullq_dropped +
+			  ppio_stats.rx_bm_dropped +
+			  ppio_stats.rx_early_dropped +
+			  ppio_stats.rx_fifo_dropped +
+			  ppio_stats.rx_cls_dropped;
+}
+
+static void
+mrvl_stats_reset(struct rte_eth_dev *dev)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+	int i;
+
+	for (i = 0; i < priv->nb_rxqs; i++)
+		pp2_ppio_inq_get_statistics(priv->ppio, 0, i, NULL, 1);
+
+	for (i = 0; i < priv->nb_txqs; i++)
+		pp2_ppio_outq_get_statistics(priv->ppio, i, NULL, 1);
+
+	pp2_ppio_get_statistics(priv->ppio, NULL, 1);
+}
+
+static void
 mrvl_dev_infos_get(struct rte_eth_dev *dev, struct rte_eth_dev_info *info)
 {
 	info->max_rx_queues = MRVL_PP2_RXQ_MAX;
@@ -747,8 +856,8 @@ static const struct eth_dev_ops mrvl_ops = {
 	.mac_addr_add = mrvl_mac_addr_add,
 	.mac_addr_set = mrvl_mac_addr_set,
 	.mtu_set = mrvl_mtu_set,
-	.stats_get = NULL,
-	.stats_reset = NULL,
+	.stats_get = mrvl_stats_get,
+	.stats_reset = mrvl_stats_reset,
 	.dev_infos_get = mrvl_dev_infos_get,
 	.rxq_info_get = NULL,
 	.txq_info_get = NULL,
@@ -867,6 +976,7 @@ mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 			mbuf->ol_flags = mrvl_desc_to_ol_flags(&descs[i]);
 
 		rx_pkts[i] = mbuf;
+		q->bytes_recv += mbuf->pkt_len;
 	}
 
 	pp2_bpool_get_num_buffs(q->priv->bpool, &num);
@@ -926,6 +1036,7 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 	struct pp2_ppio_desc descs[nb_pkts];
 	uint16_t num, nb_done;
 	int i, j, ret;
+	int bytes_sent = 0;
 
 	for (i = 0; i < nb_pkts; i++) {
 		struct rte_mbuf *mbuf = tx_pkts[i];
@@ -944,6 +1055,7 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 		pp2_ppio_outq_desc_set_pkt_len(&descs[i],
 					       rte_pktmbuf_pkt_len(mbuf));
 
+		bytes_sent += rte_pktmbuf_pkt_len(mbuf);
 		/*
 		 * in case unsupported ol_flags were passed
 		 * do not update descriptor offload information
@@ -958,13 +1070,21 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 						  mbuf->l2_len,
 						  mbuf->l2_len + mbuf->l3_len,
 						  gen_l3_cksum, gen_l4_cksum);
-
 	}
 
 	num = nb_pkts;
 	ret = pp2_ppio_send(q->priv->ppio, q->priv->hif, q->queue_id, descs, &nb_pkts);
-	if (ret)
+	if (ret) {
 		nb_pkts = 0;
+		bytes_sent = 0;
+	}
+
+	/*
+	 * TODO
+	 * In case we were not able to sent all requested packets
+	 * bytes_sent will contain wrong number of bytes. Fix that asap.
+	 */
+	q->bytes_sent += bytes_sent;
 
 	/* number of packets that were not sent */
 	num -= nb_pkts;
