@@ -79,8 +79,6 @@
 #define MRVL_PP2_AGGR_TXQD_MAX 1024
 /* maximum number of available bpools */
 #define MRVL_PP2_BPOOLS_MAX 16
-/* maximum number of BPPEs */
-#define MRVL_PP2_BPPE_MAX 8192
 
 #define MRVL_MAC_ADDRS_MAX 32
 #define MRVL_MATCH_LEN 16
@@ -156,7 +154,6 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 	snprintf(match, sizeof(match), "pool-%d:%d", priv->pp_id, ret);
 	memset(&bpool_params, 0, sizeof(bpool_params));
 	bpool_params.match = match;
-	bpool_params.max_num_buffs = MRVL_PP2_BPPE_MAX;
 	bpool_params.buff_len = RTE_MBUF_DEFAULT_BUF_SIZE;
 	ret = pp2_bpool_init(&bpool_params, &priv->bpool);
 	if (ret)
