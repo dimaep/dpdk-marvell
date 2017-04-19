@@ -143,6 +143,11 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 	char match[MRVL_MATCH_LEN];
 	int ret;
 
+	if (!dev->data->dev_conf.rxmode.hw_strip_crc) {
+		RTE_LOG(INFO, PMD, "L2 CRC stripping is always enabled in hw\n");
+		dev->data->dev_conf.rxmode.hw_strip_crc = 1;
+	}
+
 	ret = pp2_netdev_get_port_info(dev->data->name, &priv->pp_id, &priv->ppio_id);
 	if (ret)
 		return ret;
