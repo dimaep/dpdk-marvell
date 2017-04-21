@@ -60,8 +60,6 @@
 
 /* maximum number of ports supported by packet processor */
 #define MRVL_PP2_PORTS_MAX 3
-/* maximum number of available packet processors */
-#define MRVL_PP2_MAX 2
 /* maximum number of rx queues per port */
 #define MRVL_PP2_RXQ_MAX 32
 /* maximum number of tx queues per port */
@@ -886,7 +884,7 @@ static int
 rte_pmd_mrvl_probe(const char *name, const char *params)
 {
 	struct rte_kvargs *kvlist;
-	const char *ifnames[MRVL_PP2_PORTS_MAX * MRVL_PP2_MAX];
+	const char *ifnames[MRVL_PP2_PORTS_MAX * PP2_NUM_PKT_PROC];
 	int i, n, ret;
 
 	if (!name && !params)
