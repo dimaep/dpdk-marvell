@@ -58,8 +58,6 @@
 /* maximum number of available hifs */
 #define MRVL_MUSDK_HIFS_MAX 9
 
-/* maximum number of ports supported by packet processor */
-#define MRVL_PP2_PORTS_MAX 3
 /* maximum number of rx queues per port */
 #define MRVL_PP2_RXQ_MAX 32
 /* maximum number of tx queues per port */
@@ -705,7 +703,7 @@ mrvl_init_pp2(void)
 	init_params.bm_pool_reserved_map = MRVL_MUSDK_BPOOLS_RESERVED;
 
 	for (i = 0; i < pp2_get_num_inst() && i < RTE_DIM(cpn_nodes); i++) {
-		for (j = 0; j < MRVL_PP2_PORTS_MAX; j++) {
+		for (j = 0; j < PP2_NUM_ETH_PPIO; j++) {
 			snprintf(buf, sizeof(buf), path, cpn_nodes[i], j, j + 1);
 
 			fd = open(buf, O_RDONLY);
@@ -884,7 +882,7 @@ static int
 rte_pmd_mrvl_probe(const char *name, const char *params)
 {
 	struct rte_kvargs *kvlist;
-	const char *ifnames[MRVL_PP2_PORTS_MAX * PP2_NUM_PKT_PROC];
+	const char *ifnames[PP2_NUM_ETH_PPIO * PP2_NUM_PKT_PROC];
 	int i, n, ret;
 
 	if (!name && !params)
