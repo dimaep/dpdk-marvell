@@ -34,6 +34,7 @@
 #define _RTE_MRVL_PMD_PRIVATE_H_
 
 #include "rte_mrvl_compat.h"
+#include "rte_cryptodev.h"
 
 #define MRVL_CRYPTO_LOG_ERR(fmt, args...) \
 	RTE_LOG(ERR, CRYPTODEV, "[%s] %s() line %u: " fmt "\n",  \
@@ -72,16 +73,16 @@ do {								\
 #define BYTE_LENGTH(x)	((x) / NBBY) /* Number of bytes in x (round down) */
 
 #define SHA512_AUTH_KEY_LENGTH		(BYTE_LENGTH(512))
-#define SHA256_BLOCK_SIZE			(BYTE_LENGTH(512))
-
+#define SHA384_AUTH_KEY_LENGTH		(BYTE_LENGTH(384))
 #define SHA256_AUTH_KEY_LENGTH		(BYTE_LENGTH(256))
-#define SHA256_BLOCK_SIZE			(BYTE_LENGTH(512))
-
+#define SHA224_AUTH_KEY_LENGTH		(BYTE_LENGTH(224))
 #define SHA1_AUTH_KEY_LENGTH		(BYTE_LENGTH(160))
-#define SHA1_BLOCK_SIZE				(BYTE_LENGTH(512))
+#define MD5_AUTH_KEY_LENGTH			(BYTE_LENGTH(128))
+#define SHA_AUTH_KEY_MAX			SHA512_AUTH_KEY_LENGTH
 
-#define SHA_AUTH_KEY_MAX			SHA256_AUTH_KEY_LENGTH
-#define SHA_BLOCK_MAX				SHA256_BLOCK_SIZE
+#define SHA512_BLOCK_SIZE			(BYTE_LENGTH(512))
+
+#define SHA_BLOCK_MAX				SHA512_BLOCK_SIZE
 
 #define DMA_MEMSIZE					(2048)
 /** the operation order mode enumerator */
@@ -118,7 +119,8 @@ enum mrvl_crypto_cipher_keylen {
 		MRVL_CRYPTO_CIPHER_KEYLEN_NOT_SUPPORTED
 };
 
-typedef void (*crypto_key_sched_t)(uint8_t *, const uint8_t *);
+typedef int (*mv_hmac_gen_f)(unsigned char key[], int key_len,
+		     unsigned char inner[], unsigned char outer[]);
 
 /** Private data structure for each crypto device. */
 struct mrvl_crypto_private {

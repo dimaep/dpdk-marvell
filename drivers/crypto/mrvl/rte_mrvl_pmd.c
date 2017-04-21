@@ -41,6 +41,7 @@
 #include <rte_cpuflags.h>
 
 #include "rte_mrvl_pmd_private.h"
+#include "rte_mrvl_hmac.h"
 
 static int cryptodev_mrvl_crypto_uninit(const char *name);
 
@@ -81,6 +82,7 @@ __rte_aligned(32);
 struct auth_params_mapping {
 	enum algo_supported supported;
 	enum sam_auth_alg   auth_alg;		/**< auth algorithm */
+	mv_hmac_gen_f       hmac_gen_f;
 }
 /* We want to squeeze in multiple maps into the cache line. */
 __rte_aligned(16);
@@ -116,27 +118,33 @@ struct cipher_params_mapping cipher_map[RTE_CRYPTO_CIPHER_LIST_END] = {
 static const
 struct auth_params_mapping auth_map[RTE_CRYPTO_AUTH_LIST_END] = {
 	[RTE_CRYPTO_AUTH_MD5_HMAC] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_MD5},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HMAC_MD5, .hmac_gen_f = mrvl_md5_hmac_gen},
 	[RTE_CRYPTO_AUTH_MD5] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_MD5},
 	[RTE_CRYPTO_AUTH_SHA1_HMAC] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA1},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HMAC_SHA1, .hmac_gen_f = mrvl_sha1_hmac_gen},
 	[RTE_CRYPTO_AUTH_SHA1] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA1},
+		/* No support for HMAC 224 yet in MUSDK crypto. */
 	[RTE_CRYPTO_AUTH_SHA224_HMAC] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_224},
 	[RTE_CRYPTO_AUTH_SHA224] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_224},
 	[RTE_CRYPTO_AUTH_SHA256_HMAC] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_256},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HMAC_SHA2_256, .hmac_gen_f = mrvl_sha256_hmac_gen},
 	[RTE_CRYPTO_AUTH_SHA256] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_256},
 	[RTE_CRYPTO_AUTH_SHA384_HMAC] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_384},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HMAC_SHA2_384, .hmac_gen_f = mrvl_sha384_hmac_gen},
 	[RTE_CRYPTO_AUTH_SHA384] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_384},
 	[RTE_CRYPTO_AUTH_SHA512_HMAC] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_512},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HMAC_SHA2_512, .hmac_gen_f = mrvl_sha512_hmac_gen},
 	[RTE_CRYPTO_AUTH_SHA512] = {
 		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_512},
 	[RTE_CRYPTO_AUTH_AES_GCM] = {
@@ -177,135 +185,25 @@ mrvl_crypto_get_chain_order(const struct rte_crypto_sym_xform *xform)
 	return MRVL_CRYPTO_CHAIN_NOT_SUPPORTED;
 }
 
-static inline void
-auth_hmac_pad_prepare(struct mrvl_crypto_session *sess,
-				const struct rte_crypto_sym_xform *xform)
-{
-	size_t i;
-
-	/* Generate i_key_pad and o_key_pad */
-	memset(sess->auth_hmac.i_key_pad, 0, sizeof(sess->auth_hmac.i_key_pad));
-	rte_memcpy(sess->auth_hmac.i_key_pad, sess->auth_hmac.key,
-							xform->auth.key.length);
-	memset(sess->auth_hmac.o_key_pad, 0, sizeof(sess->auth_hmac.o_key_pad));
-	rte_memcpy(sess->auth_hmac.o_key_pad, sess->auth_hmac.key,
-							xform->auth.key.length);
-	/*
-	 * XOR key with IPAD/OPAD values to obtain i_key_pad
-	 * and o_key_pad.
-	 * Byte-by-byte operation may seem to be the less efficient
-	 * here but in fact it's the opposite.
-	 * The result ASM code is likely operate on NEON registers
-	 * (load auth key to Qx, load IPAD/OPAD to multiple
-	 * elements of Qy, eor 128 bits at once).
-	 */
-	for (i = 0; i < SHA_BLOCK_MAX; i++) {
-		sess->auth_hmac.i_key_pad[i] ^= HMAC_IPAD_VALUE;
-		sess->auth_hmac.o_key_pad[i] ^= HMAC_OPAD_VALUE;
-	}
-}
-
 static inline int
 auth_set_prerequisites(struct mrvl_crypto_session *sess,
 			const struct rte_crypto_sym_xform *xform)
 {
-// To be completed along with particular algorithms.
-	uint8_t partial[64] = { 0 };
-
-	switch (xform->auth.algo) {
-#if 0
-	case RTE_CRYPTO_AUTH_SHA1_HMAC:
-		/*
-		 * Generate authentication key, i_key_pad and o_key_pad.
-		 */
-		/* Zero memory under key */
-		memset(sess->auth.hmac.key, 0, SHA1_AUTH_KEY_LENGTH);
-
-		if (xform->auth.key.length > SHA1_AUTH_KEY_LENGTH) {
-			/*
-			 * In case the key is longer than 160 bits
-			 * the algorithm will use SHA1(key) instead.
-			 */
-				return -1;
-		} else {
-			/*
-			 * Now copy the given authentication key to the session
-			 * key assuming that the session key is zeroed there is
-			 * no need for additional zero padding if the key is
-			 * shorter than SHA1_AUTH_KEY_LENGTH.
-			 */
-			rte_memcpy(sess->auth.hmac.key, xform->auth.key.data,
-							xform->auth.key.length);
-		}
-
-		/* Prepare HMAC padding: key|pattern */
-		auth_hmac_pad_prepare(sess, xform);
-		/*
-		 * Calculate partial hash values for i_key_pad and o_key_pad.
-		 * Will be used as initialization state for final HMAC.
-		 */
-		memcpy(sess->auth_hmac.i_key_pad, partial, SHA1_BLOCK_SIZE);
-
-		memcpy(sess->auth_hmac.o_key_pad, partial, SHA1_BLOCK_SIZE);
-
-		break;
-#endif
-	case RTE_CRYPTO_AUTH_SHA256_HMAC:
-		/*
-		 * Generate authentication key, i_key_pad and o_key_pad.
-		 */
-		/* Zero memory under key */
-		memset(sess->auth_hmac.key, 0, SHA256_AUTH_KEY_LENGTH);
-
-		if (xform->auth.key.length > SHA256_AUTH_KEY_LENGTH) {
-			/*
-			 * In case the key is longer than 256 bits
-			 * the algorithm will use SHA256(key) instead.
-			 */
-			return -1;
-		} else {
-			/*
-			 * Now copy the given authentication key to the session
-			 * key assuming that the session key is zeroed there is
-			 * no need for additional zero padding if the key is
-			 * shorter than SHA256_AUTH_KEY_LENGTH.
-			 */
-			rte_memcpy(sess->auth_hmac.key, xform->auth.key.data,
-										xform->auth.key.length);
-		}
-
-		/* Prepare HMAC padding: key|pattern */
-		auth_hmac_pad_prepare(sess, xform);
-		/*
-		 * Calculate partial hash values for i_key_pad and o_key_pad.
-		 * Will be used as initialization state for final HMAC.
-		 */
-		memcpy(sess->auth_hmac.i_key_pad, partial, SHA256_BLOCK_SIZE);
-
-		memcpy(sess->auth_hmac.o_key_pad, partial, SHA256_BLOCK_SIZE);
-
-		break;
-	default:
-		break;
+	if (auth_map[xform->auth.algo].hmac_gen_f == NULL) {
+		/* HMAC not supported */
+		return 0;
 	}
 
-	return 0;
+	return auth_map[xform->auth.algo].hmac_gen_f(
+			xform->auth.key.data, xform->auth.key.length,
+			sess->auth_hmac.i_key_pad, sess->auth_hmac.o_key_pad);
 }
 
 static inline int
 cipher_set_prerequisites(struct mrvl_crypto_session *sess __rte_unused,
 			const struct rte_crypto_sym_xform *xform __rte_unused)
 {
-#if 0
-// To be completed along with particular algorithms.
-	crypto_key_sched_t cipher_key_sched;
-
-	cipher_key_sched = sess->cipher.key_sched;
-	if (likely(cipher_key_sched != NULL)) {
-		/* Set up cipher session key */
-		cipher_key_sched(sess->cipher.key.data, xform->cipher.key.data);
-	}
-#endif
+	/* Noting (yet?) */
 	return 0;
 }
 
@@ -561,7 +459,7 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 		struct rte_crypto_op **ops,
 		uint16_t nb_ops)
 {
-	uint16_t i, to_enq = nb_ops, handled = 0, curr_op = 0;
+	uint16_t i, to_enq = nb_ops, enqueued_total = 0, curr_op = 0;
 	int ret;
 	struct sam_cio_op_params requests[MRVL_MAX_BURST_SIZE];
 	/* DPDK uses single fragment buffers, so we can KISS descriptors.
@@ -587,6 +485,7 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 			ret = mrvl_request_prepare(&requests[i], &src_bd[i], &dst_bd[i],
 					ops[curr_op], qp);
 			if(ret < 0) {
+				qp->stats.enqueue_err_count++;
 				MRVL_CRYPTO_LOG_ERR("Error %d while parameters preparation!",
 						ret);
 				switch(ret) {
@@ -615,7 +514,7 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 
 				/* Number of handled ops increases (even if the result
 				 * of handling is error). */
-				++handled;
+				++enqueued_total;
 			}
 		} /* for (i = 0; i < to_enq;... */
 
@@ -624,10 +523,11 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 			ret = sam_cio_enq(qp->cio, requests, &i);
 			if (ret < 0) {
 				// Error handling?
+				qp->stats.enqueue_err_count += i;
 				break;
 			}
 			nb_ops -= i;
-			handled += i;
+			enqueued_total += i;
 		}
 
 		if (i < to_enq) {
@@ -650,8 +550,8 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 	} /* while (nb_ops > 0) */
 
 	/* TODO: Update stats? */
-
-	return handled;
+	qp->stats.enqueued_count += enqueued_total;
+	return enqueued_total;
 }
 
 /** Dequeue burst */
@@ -672,6 +572,7 @@ mrvl_crypto_pmd_dequeue_burst(void *queue_pair ,
 		ret = sam_cio_deq(cio, results, &to_deq);
 		if (ret) {
 			// Error
+			qp->stats.dequeue_err_count++;
 			break;
 		}
 
@@ -692,6 +593,7 @@ mrvl_crypto_pmd_dequeue_burst(void *queue_pair ,
 			break;
 		}
 	}
+	qp->stats.dequeued_count += dequeued_total;
 	return dequeued_total;
 }
 

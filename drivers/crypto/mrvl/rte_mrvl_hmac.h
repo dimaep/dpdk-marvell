@@ -30,25 +30,25 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef RTE_MRVL_COMPAT_H_
-#define RTE_MRVL_COMPAT_H_
+#ifndef RTE_MRVL_HMAC_H_
+#define RTE_MRVL_HMAC_H_
 
-#include <stdbool.h>
+int mrvl_md5_hmac_gen(unsigned char key[], int key_len,
+		     unsigned char inner[], unsigned char outer[]);
 
-/* Unluckily, container_of is defined by both DPDK and MUSDK,
- * we'll use only one version */
-#ifdef container_of
-#undef container_of
-#endif
-#include "drivers/mv_sam.h"
-#include "drivers/mv_sam_cio.h"
-#include "drivers/mv_sam_session.h"
-#include "lib/mv_sha1.h"
-#include "lib/mv_sha2.h"
-#include "lib/mv_md5.h"
+int mrvl_sha1_hmac_gen(unsigned char key[], int key_len,
+		     unsigned char inner[], unsigned char outer[]);
 
-/* Moved from src/drivers/sam/sam.h */
-#define SAM_HW_RING_SIZE       256
-#define SAM_SA_DMABUF_SIZE (64 * 4)
+int mrvl_sha224_hmac_gen(unsigned char key[], int key_len,
+		     unsigned char inner[], unsigned char outer[]);
 
-#endif /* RTE_MRVL_COMPAT_H_ */
+int mrvl_sha256_hmac_gen(unsigned char key[], int key_len,
+		     unsigned char inner[], unsigned char outer[]);
+
+int mrvl_sha384_hmac_gen(unsigned char key[], int key_len,
+		     unsigned char inner[], unsigned char outer[]);
+
+int mrvl_sha512_hmac_gen(unsigned char key[], int key_len,
+		     unsigned char inner[], unsigned char outer[]);
+
+#endif /* RTE_MRVL_HMAC_H_ */
