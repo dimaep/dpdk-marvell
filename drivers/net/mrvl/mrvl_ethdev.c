@@ -76,8 +76,6 @@
 #define MRVL_PP2_RXD_ALIGN 16
 /* maximum number of descriptors in tx aggregated queue */
 #define MRVL_PP2_AGGR_TXQD_MAX 1024
-/* maximum number of available bpools */
-#define MRVL_PP2_BPOOLS_MAX 16
 
 #define MRVL_MAC_ADDRS_MAX 32
 #define MRVL_MATCH_LEN 16
@@ -753,7 +751,7 @@ mrvl_priv_create(const char *dev_name)
 	if (ret)
 		goto out_free_priv;
 
-	priv->bpool_bit = mrvl_reserve_bit(&used_bpools, MRVL_PP2_BPOOLS_MAX);
+	priv->bpool_bit = mrvl_reserve_bit(&used_bpools, PP2_BPOOL_NUM_POOLS);
 	if (priv->bpool_bit < 0)
 		goto out_free_priv;
 
