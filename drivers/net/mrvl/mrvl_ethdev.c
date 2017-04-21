@@ -81,7 +81,6 @@
 #define MRVL_MATCH_LEN 16
 #define MRVL_PKT_OFFS 64
 #define MRVL_PKT_EFFEC_OFFS (MRVL_PKT_OFFS + PP2_MH_SIZE)
-#define MRVL_MAX_BURST_SIZE 1024
 
 #define MRVL_IFACE_NAME_ARG "iface"
 
@@ -560,13 +559,13 @@ static uint16_t
 mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 {
 	struct mrvl_rxq *q = rxq;
-	struct pp2_ppio_desc descs[MRVL_MAX_BURST_SIZE];
+	struct pp2_ppio_desc descs[PP2_MAX_NUM_PUT_BUFFS];
 	int i, ret;
 
-	if (nb_pkts > MRVL_MAX_BURST_SIZE) {
+	if (nb_pkts > PP2_MAX_NUM_PUT_BUFFS) {
 		RTE_LOG(INFO, PMD, "Cannot recive %d packets in single burst\n",
 			nb_pkts);
-		nb_pkts = MRVL_MAX_BURST_SIZE;
+		nb_pkts = PP2_MAX_NUM_PUT_BUFFS;
 	}
 
 	ret = pp2_ppio_recv(q->priv->ppio, 0, q->queue_id, descs, &nb_pkts);
@@ -642,13 +641,13 @@ static uint16_t
 mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 {
 	struct mrvl_txq *q = txq;
-	struct pp2_ppio_desc descs[MRVL_MAX_BURST_SIZE];
+	struct pp2_ppio_desc descs[PP2_MAX_NUM_PUT_BUFFS];
 	int i, ret;
 
-	if (nb_pkts > MRVL_MAX_BURST_SIZE) {
+	if (nb_pkts > PP2_MAX_NUM_PUT_BUFFS) {
 		RTE_LOG(INFO, PMD, "Cannot send %d packets in single burst\n",
 			nb_pkts);
-		nb_pkts = MRVL_MAX_BURST_SIZE;
+		nb_pkts = PP2_MAX_NUM_PUT_BUFFS;
 	}
 
 	for (i = 0; i < nb_pkts; i++) {
