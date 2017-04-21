@@ -106,6 +106,8 @@ struct mrvl_priv {
 
 	uint8_t pp_id;
 	uint8_t ppio_id;
+	uint8_t bpool_bit;
+	uint8_t hif_bit;
 };
 
 struct mrvl_rxq {
@@ -138,69 +140,27 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
 	struct pp2_ppio_inq_params *inq_params;
-	struct pp2_bpool_params bpool_params;
-	struct pp2_hif_params hif_params;
-	char match[MRVL_MATCH_LEN];
-	int ret;
 
 	if (!dev->data->dev_conf.rxmode.hw_strip_crc) {
 		RTE_LOG(INFO, PMD, "L2 CRC stripping is always enabled in hw\n");
 		dev->data->dev_conf.rxmode.hw_strip_crc = 1;
 	}
 
-	ret = pp2_netdev_get_port_info(dev->data->name, &priv->pp_id, &priv->ppio_id);
-	if (ret)
-		return ret;
-
-	ret = mrvl_reserve_bit(&used_bpools, MRVL_PP2_BPOOLS_MAX);
-	if (ret < 0)
-		return ret;
-
-	snprintf(match, sizeof(match), "pool-%d:%d", priv->pp_id, ret);
-	memset(&bpool_params, 0, sizeof(bpool_params));
-	bpool_params.match = match;
-	bpool_params.buff_len = RTE_MBUF_DEFAULT_BUF_SIZE;
-	ret = pp2_bpool_init(&bpool_params, &priv->bpool);
-	if (ret)
-		return ret;
-
-	ret = mrvl_reserve_bit(&used_hifs, MRVL_MUSDK_HIFS_MAX);
-	if (ret < 0)
-		goto out_deinit_bpool;
-
-	snprintf(match, sizeof(match), "hif-%d", ret);
-	memset(&hif_params, 0, sizeof(hif_params));
-	hif_params.match = match;
-	hif_params.out_size = MRVL_PP2_AGGR_TXQD_MAX;
-	ret = pp2_hif_init(&hif_params, &priv->hif);
-	if (ret)
-		goto out_deinit_bpool;
+	inq_params = priv->ppio_params.inqs_params.tcs_params[0].inqs_params;
+	if (inq_params)
+		rte_free(inq_params);
 
 	inq_params = rte_zmalloc_socket("inq_params",
-					dev->data->nb_rx_queues * sizeof(*inq_params),
-					0, rte_socket_id());
-	if (!inq_params) {
-		ret = -ENOMEM;
-		goto out_deinit_hif;
-	}
+				dev->data->nb_rx_queues * sizeof(*inq_params),
+				0, rte_socket_id());
+	if (!inq_params)
+		return -ENOMEM;
 
-	priv->dma_addr_high = -1;
-	priv->ppio_params.type = PP2_PPIO_T_NIC;
-
-	priv->ppio_params.inqs_params.num_tcs = 1;
-	priv->ppio_params.inqs_params.tcs_params[0].pkt_offset = MRVL_PKT_OFFS;
 	priv->ppio_params.inqs_params.tcs_params[0].num_in_qs = dev->data->nb_rx_queues;
 	priv->ppio_params.inqs_params.tcs_params[0].inqs_params = inq_params;
-	priv->ppio_params.inqs_params.tcs_params[0].pools[0] = priv->bpool;
-
 	priv->ppio_params.outqs_params.num_outqs = dev->data->nb_tx_queues;
 
 	return 0;
-out_deinit_hif:
-	pp2_hif_deinit(priv->hif);
-out_deinit_bpool:
-	pp2_bpool_deinit(priv->bpool);
-	return ret;
 }
 
 static int
@@ -220,7 +180,6 @@ mrvl_dev_stop(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
 
-	rte_free(priv->ppio_params.inqs_params.tcs_params[0].inqs_params);
 	pp2_ppio_deinit(priv->ppio);
 }
 
@@ -253,6 +212,18 @@ mrvl_dev_set_link_down(struct rte_eth_dev *dev)
 	dev->data->dev_link.link_status = ETH_LINK_DOWN;
 
 	return 0;
+}
+
+static void
+mrvl_dev_close(struct rte_eth_dev *dev)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+
+	if (priv->ppio_params.inqs_params.tcs_params[0].inqs_params)
+		rte_free(priv->ppio_params.inqs_params.tcs_params[0].inqs_params);
+
+	used_bpools &= ~(1 << priv->bpool_bit);
+	used_hifs &= ~(1 << priv->hif_bit);
 }
 
 static int
@@ -480,6 +451,7 @@ static const struct eth_dev_ops mrvl_ops = {
 	.dev_stop = mrvl_dev_stop,
 	.dev_set_link_up = mrvl_dev_set_link_up,
 	.dev_set_link_down = mrvl_dev_set_link_down,
+	.dev_close = mrvl_dev_close,
 	.link_update = mrvl_link_update,
 	.promiscuous_enable = mrvl_promiscuous_enable,
 	.promiscuous_disable = mrvl_promiscuous_disable,
@@ -624,6 +596,66 @@ mrvl_deinit_pp2(void)
 	pp2_deinit();
 }
 
+static struct mrvl_priv *
+mrvl_priv_create(const char *dev_name)
+{
+	struct pp2_bpool_params bpool_params;
+	struct pp2_hif_params hif_params;
+	char match[MRVL_MATCH_LEN];
+	struct mrvl_priv *priv;
+	int ret;
+
+	priv = rte_zmalloc_socket(dev_name, sizeof(*priv), 0, rte_socket_id());
+	if (!priv)
+		return NULL;
+
+	ret = pp2_netdev_get_port_info(dev_name, &priv->pp_id, &priv->ppio_id);
+	if (ret)
+		goto out_free_priv;
+
+	priv->bpool_bit = mrvl_reserve_bit(&used_bpools, MRVL_PP2_BPOOLS_MAX);
+	if (priv->bpool_bit < 0)
+		goto out_free_priv;
+
+	snprintf(match, sizeof(match), "pool-%d:%d", priv->pp_id, priv->bpool_bit);
+	memset(&bpool_params, 0, sizeof(bpool_params));
+	bpool_params.match = match;
+	bpool_params.buff_len = RTE_MBUF_DEFAULT_BUF_SIZE;
+	ret = pp2_bpool_init(&bpool_params, &priv->bpool);
+	if (ret)
+		goto out_clear_bpool_bit;
+
+	priv->hif_bit = mrvl_reserve_bit(&used_hifs, MRVL_MUSDK_HIFS_MAX);
+	if (priv->hif_bit < 0)
+		goto out_deinit_bpool;
+
+	snprintf(match, sizeof(match), "hif-%d", priv->hif_bit);
+	memset(&hif_params, 0, sizeof(hif_params));
+	hif_params.match = match;
+	hif_params.out_size = MRVL_PP2_AGGR_TXQD_MAX;
+	ret = pp2_hif_init(&hif_params, &priv->hif);
+	if (ret)
+		goto out_deinit_hif;
+
+	priv->dma_addr_high = -1;
+	priv->ppio_params.type = PP2_PPIO_T_NIC;
+	priv->ppio_params.inqs_params.num_tcs = 1;
+	priv->ppio_params.inqs_params.tcs_params[0].pkt_offset = MRVL_PKT_OFFS;
+	priv->ppio_params.inqs_params.tcs_params[0].pools[0] = priv->bpool;
+
+	return priv;
+out_deinit_hif:
+	pp2_hif_deinit(priv->hif);
+	used_hifs &= ~(1 << priv->hif_bit);
+out_deinit_bpool:
+	pp2_bpool_deinit(priv->bpool);
+out_clear_bpool_bit:
+	used_bpools &= ~(1 << priv->bpool_bit);
+out_free_priv:
+	rte_free(priv);
+	return NULL;
+}
+
 static int
 mrvl_eth_dev_create(const char *drv_name, const char *name)
 {
@@ -636,7 +668,7 @@ mrvl_eth_dev_create(const char *drv_name, const char *name)
 	if (!eth_dev)
 		return -ENOMEM;
 
-	priv = rte_zmalloc_socket(name, sizeof(*priv), 0, rte_socket_id());
+	priv = mrvl_priv_create(name);
 	if (!priv) {
 		ret = -ENOMEM;
 		goto out_free_dev;
