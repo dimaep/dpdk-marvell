@@ -84,7 +84,7 @@ do {								\
 
 #define SHA_BLOCK_MAX				SHA512_BLOCK_SIZE
 
-#define DMA_MEMSIZE					(2048)
+#define DMA_MEMSIZE					(2048*1024)
 /** the operation order mode enumerator */
 enum mrvl_crypto_chain_order {
 	MRVL_CRYPTO_CHAIN_CIPHER_ONLY,
