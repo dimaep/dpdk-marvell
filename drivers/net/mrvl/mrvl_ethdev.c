@@ -81,6 +81,7 @@
 #define MRVL_MATCH_LEN 16
 #define MRVL_PKT_OFFS 64
 #define MRVL_PKT_EFFEC_OFFS (MRVL_PKT_OFFS + PP2_MH_SIZE)
+#define MRVL_VLAN_TAG_SIZE 4
 
 #define MRVL_IFACE_NAME_ARG "iface"
 
@@ -165,15 +166,62 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 }
 
 static int
+mrvl_update_mru_mtu(struct rte_eth_dev *dev, uint16_t mtu)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+	uint16_t mru, curr_mtu;
+	int ret;
+
+	ret = pp2_ppio_get_mtu(priv->ppio, &curr_mtu);
+	if (ret) {
+		RTE_LOG(ERR, PMD, "Failed to get current mtu\n");
+		return ret;
+	}
+
+	if (curr_mtu == mtu)
+		return 0;
+
+	mru = mtu + PP2_MH_SIZE + ETHER_HDR_LEN + ETHER_CRC_LEN +
+	      MRVL_VLAN_TAG_SIZE;
+
+	ret = pp2_ppio_set_mru(priv->ppio, mru);
+	if (ret) {
+		RTE_LOG(ERR, PMD, "Failed to set mru to %d\n", mru);
+		return ret;
+	}
+
+	ret = pp2_ppio_set_mtu(priv->ppio, mtu);
+	if (ret) {
+		RTE_LOG(ERR, PMD, "Failed to set mtu to %d\n", mtu);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int
 mrvl_dev_start(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
 	char match[MRVL_MATCH_LEN];
+	uint16_t size;
+	int ret;
 
 	snprintf(match, sizeof(match), "ppio-%d:%d", priv->pp_id, priv->ppio_id);
 	priv->ppio_params.match = match;
 
-	return pp2_ppio_init(&priv->ppio_params, &priv->ppio);
+	ret = pp2_ppio_init(&priv->ppio_params, &priv->ppio);
+	if (ret)
+		return ret;
+
+	ret = mrvl_update_mru_mtu(dev, dev->data->mtu);
+	if (ret) {
+		pp2_ppio_deinit(priv->ppio);
+
+		return ret;
+	}
+
+	return 0;
 }
 
 static void
@@ -313,8 +361,18 @@ static int
 mrvl_mtu_set(struct rte_eth_dev *dev, uint16_t mtu)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
+	int ret;
 
-	return pp2_ppio_set_mtu(priv->ppio, mtu);
+	ret = mrvl_update_mru_mtu(dev, mtu);
+	if (ret)
+		return ret;
+
+	if (mtu > ETHER_MAX_LEN)
+		dev->data->dev_conf.rxmode.jumbo_frame = 1;
+	else
+		dev->data->dev_conf.rxmode.jumbo_frame = 0;
+
+	return 0;
 }
 
 static void
