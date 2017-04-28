@@ -90,7 +90,10 @@ static const char *valid_args[] = {
 };
 
 static int used_hifs = MRVL_MUSDK_HIFS_RESERVED;
-static int used_bpools = MRVL_MUSDK_BPOOLS_RESERVED;
+static int used_bpools[PP2_NUM_PKT_PROC] = {
+	MRVL_MUSDK_BPOOLS_RESERVED,
+	MRVL_MUSDK_BPOOLS_RESERVED
+};
 
 struct mrvl_priv {
 	struct pp2_hif *hif;
@@ -220,7 +223,7 @@ mrvl_dev_close(struct rte_eth_dev *dev)
 	if (priv->ppio_params.inqs_params.tcs_params[0].inqs_params)
 		rte_free(priv->ppio_params.inqs_params.tcs_params[0].inqs_params);
 
-	used_bpools &= ~(1 << priv->bpool_bit);
+	used_bpools[priv->pp_id] &= ~(1 << priv->bpool_bit);
 	used_hifs &= ~(1 << priv->hif_bit);
 }
 
@@ -750,7 +753,8 @@ mrvl_priv_create(const char *dev_name)
 	if (ret)
 		goto out_free_priv;
 
-	priv->bpool_bit = mrvl_reserve_bit(&used_bpools, PP2_BPOOL_NUM_POOLS);
+	priv->bpool_bit = mrvl_reserve_bit(&used_bpools[priv->pp_id],
+					   PP2_BPOOL_NUM_POOLS);
 	if (priv->bpool_bit < 0)
 		goto out_free_priv;
 
@@ -787,7 +791,7 @@ out_deinit_hif:
 out_deinit_bpool:
 	pp2_bpool_deinit(priv->bpool);
 out_clear_bpool_bit:
-	used_bpools &= ~(1 << priv->bpool_bit);
+	used_bpools[priv->pp_id] &= ~(1 << priv->bpool_bit);
 out_free_priv:
 	rte_free(priv);
 	return NULL;
