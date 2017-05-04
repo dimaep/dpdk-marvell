@@ -148,6 +148,11 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 		dev->data->dev_conf.rxmode.hw_strip_crc = 1;
 	}
 
+	if (dev->data->dev_conf.rxmode.hw_vlan_strip) {
+		RTE_LOG(INFO, PMD, "VLAN stripping not supported\n");
+		return -EINVAL;
+	}
+
 	if (dev->data->dev_conf.rxmode.split_hdr_size) {
 		RTE_LOG(INFO, PMD, "Split headers not supported\n");
 		return -EINVAL;
