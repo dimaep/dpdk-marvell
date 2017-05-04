@@ -152,6 +152,9 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 		RTE_LOG(INFO, PMD, "Split headers not supported\n");
 		return -EINVAL;
 	}
+
+	if (dev->data->dev_conf.rxmode.enable_lro) {
+		RTE_LOG(INFO, PMD, "LRO not supported\n");
 		return -EINVAL;
 	}
 
