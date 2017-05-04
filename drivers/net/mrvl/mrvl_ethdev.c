@@ -505,6 +505,11 @@ mrvl_tx_queue_setup(struct rte_eth_dev *dev, uint16_t idx, uint16_t desc,
 	struct mrvl_txq *txq;
 	int i;
 
+	if (dev->data->tx_queues[idx]) {
+		rte_free(dev->data->tx_queues[idx]);
+		dev->data->tx_queues[idx] = NULL;
+	}
+
 	txq = rte_zmalloc_socket("txq", sizeof(*txq), 0, socket);
 	if (!txq)
 		return -ENOMEM;
