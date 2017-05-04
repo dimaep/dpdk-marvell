@@ -148,6 +148,13 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 		dev->data->dev_conf.rxmode.hw_strip_crc = 1;
 	}
 
+	if (dev->data->dev_conf.rxmode.split_hdr_size) {
+		RTE_LOG(INFO, PMD, "Split headers not supported\n");
+		return -EINVAL;
+	}
+		return -EINVAL;
+	}
+
 	inq_params = priv->ppio_params.inqs_params.tcs_params[0].inqs_params;
 	if (inq_params)
 		rte_free(inq_params);
