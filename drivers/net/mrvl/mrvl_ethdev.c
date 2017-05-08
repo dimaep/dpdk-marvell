@@ -365,6 +365,7 @@ mrvl_mac_addr_set(struct rte_eth_dev *dev, struct ether_addr *mac_addr)
 
 	pp2_ppio_set_mac_addr(priv->ppio, mac_addr->addr_bytes);
 	/*
+	 * TODO
 	 * Port stops sending packets if pp2_ppio_set_mac_addr()
 	 * was called after pp2_ppio_enable(). As a quick fix issue
 	 * enable port once again.
