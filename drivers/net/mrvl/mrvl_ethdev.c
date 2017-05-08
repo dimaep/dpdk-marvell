@@ -273,7 +273,7 @@ mrvl_dev_start(struct rte_eth_dev *dev)
 		return ret;
 	}
 
-	return 0;
+	return mrvl_dev_set_link_up(dev);
 }
 
 static void
@@ -281,6 +281,7 @@ mrvl_dev_stop(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
 
+	mrvl_dev_set_link_down(dev);
 	pp2_ppio_deinit(priv->ppio);
 }
 
