@@ -220,6 +220,38 @@ mrvl_update_mru_mtu(struct rte_eth_dev *dev, uint16_t mtu)
 }
 
 static int
+mrvl_dev_set_link_up(struct rte_eth_dev *dev)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+	int ret;
+
+	ret = pp2_ppio_enable(priv->ppio);
+	if (ret)
+		return ret;
+
+	dev->data->dev_link.link_status = ETH_LINK_UP;
+
+	return 0;
+}
+
+static int
+mrvl_dev_set_link_down(struct rte_eth_dev *dev)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+	int ret;
+
+
+	ret = pp2_ppio_disable(priv->ppio);
+	if (ret)
+		return ret;
+
+	dev->data->dev_link.link_status = ETH_LINK_DOWN;
+
+	return 0;
+}
+
+
+static int
 mrvl_dev_start(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
@@ -250,37 +282,6 @@ mrvl_dev_stop(struct rte_eth_dev *dev)
 	struct mrvl_priv *priv = dev->data->dev_private;
 
 	pp2_ppio_deinit(priv->ppio);
-}
-
-static int
-mrvl_dev_set_link_up(struct rte_eth_dev *dev)
-{
-	struct mrvl_priv *priv = dev->data->dev_private;
-	int ret;
-
-	ret = pp2_ppio_enable(priv->ppio);
-	if (ret)
-		return ret;
-
-	dev->data->dev_link.link_status = ETH_LINK_UP;
-
-	return 0;
-}
-
-static int
-mrvl_dev_set_link_down(struct rte_eth_dev *dev)
-{
-	struct mrvl_priv *priv = dev->data->dev_private;
-	int ret;
-
-
-	ret = pp2_ppio_disable(priv->ppio);
-	if (ret)
-		return ret;
-
-	dev->data->dev_link.link_status = ETH_LINK_DOWN;
-
-	return 0;
 }
 
 static void
