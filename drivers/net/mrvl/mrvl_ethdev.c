@@ -359,22 +359,15 @@ mrvl_mac_addr_add(struct rte_eth_dev *dev, struct ether_addr *mac_addr,
 static void
 mrvl_mac_addr_set(struct rte_eth_dev *dev, struct ether_addr *mac_addr)
 {
-	int fd = socket(AF_INET, SOCK_DGRAM, 0);
-	char buf[ETHER_ADDR_FMT_SIZE];
-	struct ifreq req;
-	int ret;
+	struct mrvl_priv *priv = dev->data->dev_private;
 
-	/* TODO: temporary solution until musdk provides something similar */
-	memset(&req, 0, sizeof(req));
-	strcpy(req.ifr_name, dev->data->name);
-	memcpy(req.ifr_hwaddr.sa_data, mac_addr->addr_bytes, ETHER_ADDR_LEN);
-	req.ifr_hwaddr.sa_family = ARPHRD_ETHER;
-
-	ret = ioctl(fd, SIOCSIFHWADDR, &req);
-	if (ret) {
-		ether_format_addr(buf, sizeof(buf), mac_addr);
-		RTE_LOG(ERR, PMD, "Failed to set mac %s\n", buf);
-	}
+	pp2_ppio_set_mac_addr(priv->ppio, mac_addr->addr_bytes);
+	/*
+	 * Port stops sending packets if pp2_ppio_set_mac_addr()
+	 * was called after pp2_ppio_enable(). As a quick fix issue
+	 * enable port once again.
+	 */
+	pp2_ppio_enable(priv->ppio);
 }
 
 static int
