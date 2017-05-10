@@ -84,6 +84,7 @@
 #define MRVL_VLAN_TAG_SIZE 4
 
 #define MRVL_IFACE_NAME_ARG "iface"
+#define MRVL_BURST_SIZE 32
 
 static const char *valid_args[] = {
 	MRVL_IFACE_NAME_ARG,
@@ -94,6 +95,15 @@ static int used_hifs = MRVL_MUSDK_HIFS_RESERVED;
 static int used_bpools[PP2_NUM_PKT_PROC] = {
 	MRVL_MUSDK_BPOOLS_RESERVED,
 	MRVL_MUSDK_BPOOLS_RESERVED
+};
+
+struct pp2_bpool *mrvl_port_to_bpool_lookup[RTE_MAX_ETHPORTS];
+
+struct mrvl_shadow_txq {
+	int head;
+	int tail;
+
+	struct pp2_buff_inf infs[MRVL_PP2_TXD_MAX];
 };
 
 struct mrvl_priv {
@@ -108,12 +118,13 @@ struct mrvl_priv {
 	uint8_t ppio_id;
 	uint8_t bpool_bit;
 	uint8_t hif_bit;
+
+	struct mrvl_shadow_txq shadow_txq;
 };
 
 struct mrvl_rxq {
 	struct mrvl_priv *priv;
 	struct rte_mempool *mp;
-	int num_missing;
 	int queue_id;
 	int port_id;
 
@@ -425,42 +436,45 @@ mrvl_vlan_filter_set(struct rte_eth_dev *dev, uint16_t vlan_id, int on)
 }
 
 static int
-mrvl_fill_bpool(struct mrvl_rxq *rxq)
+mrvl_fill_bpool(struct mrvl_rxq *rxq, int num)
 {
-	struct pp2_buff_inf buff_inf;
-	struct rte_mbuf *mbuf;
+	struct buff_release_entry entries[MRVL_PP2_TXD_MAX];
+	struct rte_mbuf *mbufs[MRVL_PP2_TXD_MAX + 1] = { };
 	uint64_t dma_addr;
-	int ret;
+	int i, ret;
 
-	mbuf = rte_pktmbuf_alloc(rxq->mp);
-	if (unlikely(!mbuf))
-		return -ENOMEM;
+	ret = rte_pktmbuf_alloc_bulk(rxq->mp, mbufs, num);
+	if (ret)
+		return ret;
 
-	dma_addr = rte_mbuf_data_dma_addr_default(mbuf);
+	for (i = 0; i < num; i++) {
+		dma_addr = rte_mbuf_data_dma_addr_default(mbufs[i]);
+		if (rxq->priv->dma_addr_high == -1)
+			rxq->priv->dma_addr_high = dma_addr >> 32;
 
-	if (unlikely(rxq->priv->dma_addr_high == -1))
-		rxq->priv->dma_addr_high = dma_addr >> 32;
+		if (rxq->priv->dma_addr_high != dma_addr >> 32) {
+			RTE_LOG(ERR, PMD, "mbuf outside proper address range\n");
+			ret = -EFAULT;
+			goto out;
+		}
 
-	/* all BPPEs must be located in the same 4GB address space */
-	if (unlikely(rxq->priv->dma_addr_high != dma_addr >> 32)) {
-		ret = -EFAULT;
-		goto out_free_mbuf;
+		entries[i].buff.addr = dma_addr;
+		entries[i].buff.cookie = (pp2_cookie_t)mbufs[i];
+		entries[i].bpool = rxq->priv->bpool;
 	}
 
-	buff_inf.addr = dma_addr;
-	buff_inf.cookie = (pp2_cookie_t)mbuf;
-
-	ret = pp2_bpool_put_buff(rxq->priv->hif, rxq->priv->bpool,
-				 &buff_inf);
-	if (unlikely(ret)) {
-		RTE_LOG(ERR, PMD, "Failed to release buffer to bm\n");
-		ret = -EFAULT;
-		goto out_free_mbuf;
+	ret = pp2_bpool_put_buffs(rxq->priv->hif, entries, (uint16_t *)&i);
+	if (ret)
+		goto out;
+	if (i != num) {
+		ret = -1;
+		goto out;
 	}
 
 	return 0;
-out_free_mbuf:
-	rte_pktmbuf_free(mbuf);
+out:
+	for (; i >= 0; i--)
+		rte_pktmbuf_free(mbufs[i]);
 
 	return ret;
 }
@@ -489,28 +503,19 @@ mrvl_rx_queue_setup(struct rte_eth_dev *dev, uint16_t idx, uint16_t desc,
 	rxq->cksum_enabled = dev->data->dev_conf.rxmode.hw_ip_checksum;
 	rxq->queue_id = idx;
 	rxq->port_id = dev->data->port_id;
-
-	dev->data->rx_queues[idx] = rxq;
+	mrvl_port_to_bpool_lookup[rxq->port_id] = priv->bpool;
 
 	priv->ppio_params.inqs_params.tcs_params[0].inqs_params[idx].size = desc;
 
-	for (i = 0; i < desc; i++) {
-		ret = mrvl_fill_bpool(rxq);
-		if (ret)
-			goto out_free_mbufs;
+	ret = mrvl_fill_bpool(rxq, desc);
+	if (ret) {
+		rte_free(rxq);
+		return ret;
 	}
+
+	dev->data->rx_queues[idx] = rxq;
 
 	return 0;
-out_free_mbufs:
-	for (; i >= 0; i--) {
-		struct pp2_buff_inf inf;
-
-		pp2_bpool_get_buff(rxq->priv->hif, rxq->priv->bpool, &inf);
-		rte_pktmbuf_free((void *)inf.cookie);
-	}
-out_free_rxq:
-	rte_free(rxq);
-	return ret;
 }
 
 static int
@@ -647,14 +652,8 @@ static uint16_t
 mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 {
 	struct mrvl_rxq *q = rxq;
-	struct pp2_ppio_desc descs[PP2_MAX_NUM_PUT_BUFFS];
-	int i, ret;
-
-	if (nb_pkts > PP2_MAX_NUM_PUT_BUFFS) {
-		RTE_LOG(INFO, PMD, "Cannot recive %d packets in single burst\n",
-			nb_pkts);
-		nb_pkts = PP2_MAX_NUM_PUT_BUFFS;
-	}
+	struct pp2_ppio_desc descs[nb_pkts];
+	int i, num, ret;
 
 	ret = pp2_ppio_recv(q->priv->ppio, 0, q->queue_id, descs, &nb_pkts);
 	if (ret < 0) {
@@ -680,16 +679,13 @@ mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 			mbuf->ol_flags = mrvl_desc_to_ol_flags(&descs[i]);
 
 		rx_pkts[i] = mbuf;
-
-		q->num_missing++;
 	}
 
-	while (q->num_missing) {
-		ret = mrvl_fill_bpool(q);
+	pp2_bpool_get_num_buffs(q->priv->bpool, &num);
+	if (unlikely(num <= 2 * MRVL_BURST_SIZE)) {
+		ret = mrvl_fill_bpool(q, MRVL_BURST_SIZE);
 		if (ret)
-			break;
-
-		q->num_missing--;
+			RTE_LOG(ERR, PMD, "Failed to fill bpool\n");
 	}
 
 	return nb_pkts;
@@ -729,20 +725,21 @@ static uint16_t
 mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 {
 	struct mrvl_txq *q = txq;
-	struct pp2_ppio_desc descs[PP2_MAX_NUM_PUT_BUFFS];
-	int i, ret;
-
-	if (nb_pkts > PP2_MAX_NUM_PUT_BUFFS) {
-		RTE_LOG(INFO, PMD, "Cannot send %d packets in single burst\n",
-			nb_pkts);
-		nb_pkts = PP2_MAX_NUM_PUT_BUFFS;
-	}
+	struct mrvl_shadow_txq *sq = &q->priv->shadow_txq;
+	struct buff_release_entry entries[MRVL_PP2_TXD_MAX];
+	struct pp2_ppio_desc descs[nb_pkts];
+	uint16_t num, nb_done;
+	int i, j, ret;
 
 	for (i = 0; i < nb_pkts; i++) {
 		struct rte_mbuf *mbuf = tx_pkts[i];
 		int gen_l3_cksum, gen_l4_cksum;
 		enum pp2_outq_l3_type l3_type;
 		enum pp2_outq_l4_type l4_type;
+
+		sq->infs[sq->head].cookie = (pp2_cookie_t)mbuf;
+		sq->infs[sq->head].addr = rte_mbuf_data_dma_addr_default(mbuf);
+		sq->head = (sq->head + 1) % RTE_DIM(sq->infs);
 
 		pp2_ppio_outq_desc_reset(&descs[i]);
 		pp2_ppio_outq_desc_set_phys_addr(&descs[i],
@@ -761,14 +758,40 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 						  mbuf->l2_len,
 						  mbuf->l2_len + mbuf->l3_len,
 						  gen_l3_cksum, gen_l4_cksum);
+
 	}
 
 	ret = pp2_ppio_send(q->priv->ppio, q->priv->hif, 0, descs, &nb_pkts);
 	if (ret)
 		nb_pkts = 0;
 
-	for (i = 0; i < nb_pkts; i++)
-		rte_pktmbuf_free(tx_pkts[i]);
+	pp2_ppio_get_num_outq_done(q->priv->ppio, q->priv->hif, 0, &nb_done);
+
+	for (i = 0, j = 0, num = 0; i < nb_done; i++) {
+		struct pp2_buff_inf *inf = &sq->infs[sq->tail];
+		struct rte_mbuf *mbuf = (struct rte_mbuf *)inf->cookie;
+
+		if (unlikely(mbuf->port == 0xff || mbuf->refcnt > 1)) {
+			rte_pktmbuf_free(mbuf);
+			goto skip;
+		}
+
+		entries[j].buff.addr = inf->addr;
+		entries[j].buff.cookie = inf->cookie;
+		entries[j].bpool = mrvl_port_to_bpool_lookup[mbuf->port];
+		rte_pktmbuf_reset(mbuf);
+		j++;
+		num++;
+skip:
+		sq->tail = (sq->tail + 1) % RTE_DIM(sq->infs);
+		if (sq->tail == 0) {
+			pp2_bpool_put_buffs(q->priv->hif, entries, &num);
+			j = 0;
+			num = 0;
+		}
+	}
+
+	pp2_bpool_put_buffs(q->priv->hif, entries, &num);
 
 	return nb_pkts;
 }
