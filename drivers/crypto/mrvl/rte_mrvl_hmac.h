@@ -33,21 +33,63 @@
 #ifndef RTE_MRVL_HMAC_H_
 #define RTE_MRVL_HMAC_H_
 
+/**
+ * MD5 HMAC IV generation function.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_md5_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[]);
 
+/**
+ * SHA1 HMAC IV generation function.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_sha1_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[]);
 
-int mrvl_sha224_hmac_gen(unsigned char key[], int key_len,
-		     unsigned char inner[], unsigned char outer[]);
-
+/**
+ * SHA256 HMAC IV generation function.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_sha256_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[]);
 
+/**
+ * SHA384 HMAC IV generation function.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_sha384_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[]);
 
+/**
+ * SHA512 HMAC IV generation function.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_sha512_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[]);
 

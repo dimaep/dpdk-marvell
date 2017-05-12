@@ -38,6 +38,9 @@
 
 #include "rte_mrvl_pmd_private.h"
 
+/**
+ * Capabilities list to be used in reporting to DPDK.
+ */
 static const struct rte_cryptodev_capabilities
 	mrvl_crypto_pmd_capabilities[] = {
 	{	/* MD5 HMAC */
@@ -124,6 +127,7 @@ static const struct rte_cryptodev_capabilities
 			}, }
 		}, }
 	},
+#if 0 /* SHA224 HMAC is supported by MUSDK, but IV generation not (yet). */
 	{	/* SHA224 HMAC */
 		.op = RTE_CRYPTO_OP_TYPE_SYMMETRIC,
 		{.sym = {
@@ -145,6 +149,7 @@ static const struct rte_cryptodev_capabilities
 			}, }
 		}, }
 	},
+#endif
 	{	/* SHA224 */
 		.op = RTE_CRYPTO_OP_TYPE_SYMMETRIC,
 		{.sym = {
@@ -447,27 +452,47 @@ static const struct rte_cryptodev_capabilities
 };
 
 
-/** Configure device */
+/**
+ * Configure device (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @returns 0. Always.
+ */
 static int
 mrvl_crypto_pmd_config(__rte_unused struct rte_cryptodev *dev)
 {
 	return 0;
 }
 
-/** Start device */
+/**
+ * Start device (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @returns 0. Always.
+ */
 static int
 mrvl_crypto_pmd_start(__rte_unused struct rte_cryptodev *dev)
 {
 	return 0;
 }
 
-/** Stop device */
+/**
+ * Stop device (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @returns 0. Always.
+ */
 static void
 mrvl_crypto_pmd_stop(__rte_unused struct rte_cryptodev *dev)
 {
 }
 
-/** Close device */
+/**
+ * Close device (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @returns 0. Always.
+ */
 static int
 mrvl_crypto_pmd_close(__rte_unused struct rte_cryptodev *dev)
 {
@@ -475,7 +500,12 @@ mrvl_crypto_pmd_close(__rte_unused struct rte_cryptodev *dev)
 }
 
 
-/** Get device statistics */
+/**
+ * Get device statistics (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @param stats Pointer to statistics structure [out].
+ */
 static void
 mrvl_crypto_pmd_stats_get(struct rte_cryptodev *dev,
 		struct rte_cryptodev_stats *stats)
@@ -493,7 +523,11 @@ mrvl_crypto_pmd_stats_get(struct rte_cryptodev *dev,
 	}
 }
 
-/** Reset device statistics */
+/**
+ * Reset device statistics (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ */
 static void
 mrvl_crypto_pmd_stats_reset(struct rte_cryptodev *dev)
 {
@@ -507,7 +541,12 @@ mrvl_crypto_pmd_stats_reset(struct rte_cryptodev *dev)
 }
 
 
-/** Get device info */
+/**
+ * Get device info (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @param dev_info Pointer to the device info structure [out].
+ */
 static void
 mrvl_crypto_pmd_info_get(struct rte_cryptodev *dev,
 		struct rte_cryptodev_info *dev_info)
@@ -523,7 +562,13 @@ mrvl_crypto_pmd_info_get(struct rte_cryptodev *dev,
 	}
 }
 
-/** Release queue pair */
+/**
+ * Release queue pair (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @param qp_id ID of Queue Pair to release.
+ * @returns 0. Always.
+ */
 static int
 mrvl_crypto_pmd_qp_release(struct rte_cryptodev *dev, uint16_t qp_id)
 {
@@ -539,15 +584,25 @@ mrvl_crypto_pmd_qp_release(struct rte_cryptodev *dev, uint16_t qp_id)
 	return 0;
 }
 
-/** Setup a queue pair */
+/**
+ * Setup a queue pair (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @param qp_id ID of the Queue Pair.
+ * @param qp_conf Queue pair configuration (nb of descriptors).
+ * @param socket_id S
+ * @returns 0 upon success, negative value otherwise.
+ */
 static int
 mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
-		const struct rte_cryptodev_qp_conf *qp_conf __rte_unused,
+		const struct rte_cryptodev_qp_conf *qp_conf,
 		 int socket_id)
 {
 	struct mrvl_crypto_qp *qp = NULL;
 	unsigned int n;
 	struct mrvl_crypto_private *priv = dev->data->dev_private;
+	uint32_t descriptors = (qp_conf->nb_descriptors > SAM_HW_RING_SIZE) ?
+			SAM_HW_RING_SIZE : qp_conf->nb_descriptors;
 
 	/* Free memory prior to re-allocation if needed. */
 	if (dev->data->queue_pairs[qp_id] != NULL)
@@ -560,7 +615,6 @@ mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
 		return -ENOMEM;
 	do { /* Error handling block */
 		qp->id = qp_id;
-		dev->data->queue_pairs[qp_id] = qp;
 
 		n = snprintf(qp->name, sizeof(qp->name), "cio-%u:%u",
 				dev->data->dev_id, qp->id);
@@ -569,7 +623,7 @@ mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
 			break;
 
 		qp->cio_params.match = qp->name;
-		qp->cio_params.size = SAM_HW_RING_SIZE;
+		qp->cio_params.size = descriptors;
 		qp->cio_params.num_sessions = priv->max_nb_sessions;
 		qp->cio_params.max_buf_size = SAM_SA_DMABUF_SIZE;
 
@@ -579,7 +633,7 @@ mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
 		qp->sess_mp = dev->data->session_pool;
 
 		memset(&qp->stats, 0, sizeof(qp->stats));
-
+		dev->data->queue_pairs[qp_id] = qp;
 		return 0;
 	} while (0);
 
@@ -587,7 +641,12 @@ mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
 	return -1;
 }
 
-/** Start queue pair */
+/** Start queue pair (PMD ops callback) - not supported.
+ *
+ * @param dev Pointer to the device structure.
+ * @param qp_id ID of the Queue Pair.
+ * @returns -ENOTSUP. Always.
+ */
 static int
 mrvl_crypto_pmd_qp_start(__rte_unused struct rte_cryptodev *dev,
 		__rte_unused uint16_t queue_pair_id)
@@ -595,7 +654,12 @@ mrvl_crypto_pmd_qp_start(__rte_unused struct rte_cryptodev *dev,
 	return -ENOTSUP;
 }
 
-/** Stop queue pair */
+/** Stop queue pair (PMD ops callback) - not supported.
+ *
+ * @param dev Pointer to the device structure.
+ * @param qp_id ID of the Queue Pair.
+ * @returns -ENOTSUP. Always.
+ */
 static int
 mrvl_crypto_pmd_qp_stop(__rte_unused struct rte_cryptodev *dev,
 		__rte_unused uint16_t queue_pair_id)
@@ -603,23 +667,37 @@ mrvl_crypto_pmd_qp_stop(__rte_unused struct rte_cryptodev *dev,
 	return -ENOTSUP;
 }
 
-/** Return the number of allocated queue pairs */
+/** Return the number of allocated queue pairs (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @returns Number of allocated queue pairs.
+ */
 static uint32_t
 mrvl_crypto_pmd_qp_count(struct rte_cryptodev *dev)
 {
 	return dev->data->nb_queue_pairs;
 }
 
-/** Returns the size of the session structure */
+/** Returns the size of the session structure (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure [Unused].
+ * @returns Size of Marvell crypto session.
+ */
 static unsigned
 mrvl_crypto_pmd_session_get_size(struct rte_cryptodev *dev __rte_unused)
 {
 	return sizeof(struct mrvl_crypto_session);
 }
 
-/** Configure the session from a crypto xform chain */
+/** Configure the session from a crypto xform chain (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @param xform Pointer to the crytpo configuration structure.
+ * @param sess Pointer to the empty session structure.
+ * @returns Pointer to the (now configured) session structure.
+ */
 static void *
-mrvl_crypto_pmd_session_configure(struct rte_cryptodev *dev __rte_unused,
+mrvl_crypto_pmd_session_configure(struct rte_cryptodev *dev,
 		struct rte_crypto_sym_xform *xform, void *sess)
 {
 	if (unlikely(sess == NULL)) {
@@ -632,12 +710,16 @@ mrvl_crypto_pmd_session_configure(struct rte_cryptodev *dev __rte_unused,
 		MRVL_CRYPTO_LOG_ERR("Failed to configure session parameters.");
 		return NULL;
 	}
-	/* Session initialization is to be done later, when first packet arrives
-	 *  for correct qpair, so we know cio. */
+	/* Session initialization can be done only later, when first packet arrives
+	 * for correct qpair, so we know cio. */
 	return sess;
 }
 
-/** Clear the memory of session so it doesn't leave key material behind */
+/** Clear the memory of session so it doesn't leave key material behind (PMD ops callback).
+ *
+ * @param dev Pointer to the device structure.
+ * @returns 0. Always.
+ */
 static void
 mrvl_crypto_pmd_session_clear(struct rte_cryptodev *dev __rte_unused,
 				void *sess)
@@ -655,6 +737,9 @@ mrvl_crypto_pmd_session_clear(struct rte_cryptodev *dev __rte_unused,
 	}
 }
 
+/**
+ * PMD handlers for crypto ops.
+ */
 struct rte_cryptodev_ops mrvl_crypto_pmd_ops = {
 		.dev_configure		= mrvl_crypto_pmd_config,
 		.dev_start			= mrvl_crypto_pmd_start,
@@ -677,5 +762,3 @@ struct rte_cryptodev_ops mrvl_crypto_pmd_ops = {
 		.session_configure	= mrvl_crypto_pmd_session_configure,
 		.session_clear		= mrvl_crypto_pmd_session_clear
 };
-
-struct rte_cryptodev_ops *rte_mrvl_crypto_pmd_ops = &mrvl_crypto_pmd_ops;

@@ -36,14 +36,45 @@
 #include "rte_mrvl_pmd_private.h"
 #include "rte_mrvl_compat.h"
 
+/**
+ * Prototype for Marvell's IV generation handler.
+ *
+ * It is similar to mv_hmac_gen_f, except it has no return type.
+ * @param Key array.
+ * @param Length of the key array.
+ * @param Inner pad array.
+ * @param Outer pad array.
+ */
 typedef void (*mrvl_iv_f)(unsigned char[], int ,
 			unsigned char[], unsigned char[]);
 
+/**
+ * Prototype for hash generation wrapping handler.
+ *
+ * We need wrappers, as Marvell's hash functions have different(!) prototypes
+ * for each hash function.
+ * @param Buffer.
+ * @param Buffer length.
+ * @param Hash.
+ * @returns 0 for success, negative value otherwise.
+ */
 typedef int (*mrvl_hash_f)(const u_int8_t*, size_t, char[]);
 
-/* The HMAC-generation algorithm is pretty much hash-agnostic.
+/**
+ * Generate HMAC for various alorithms.
+ *
+ * The HMAC-generation algorithm is pretty much hash-agnostic.
  * Therefore we can construct the below generic function, with the help
- * of MUSDK routine for */
+ * of MUSDK routines for IV/hash generation.
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @param max_key_len Maximum key length that can be transformed directly.
+ * @param iv_f IV generation handler.
+ * @param hash_f Hash generation handler (for keys longer than max_key_len).
+ * @returns 0 for success, negative value otherwise.
+ */
 static
 int mrvl_generic_hmac_gen(unsigned char key[], int key_len,
 			unsigned char inner[], unsigned char outer[],
@@ -74,8 +105,17 @@ int mrvl_generic_hmac_gen(unsigned char key[], int key_len,
 	return 0;
 }
 
-/* === As MUSDK hash functions do not have same prototype, we need to wrap ===
- * === them to use in generic manner. === */
+/* === As MUSDK hash functions do not have the same prototype, we need ===
+ * === to wrap them to use in generic manner.                          === */
+
+/**
+ * Wrapper for SHA1 hash.
+ *
+ * @param Buffer.
+ * @param Buffer length.
+ * @param Hash.
+ * @returns 0. Always.
+ */
 static
 int mrvl_sha1(const u_int8_t* data, size_t len, char hash[])
 {
@@ -83,6 +123,14 @@ int mrvl_sha1(const u_int8_t* data, size_t len, char hash[])
 	return 0;
 }
 
+/**
+ * Wrapper for MD5 hash.
+ *
+ * @param Buffer.
+ * @param Buffer length.
+ * @param Hash.
+ * @returns 0. Always.
+ */
 static
 int mrvl_md5(const u_int8_t* data, size_t len, char hash[])
 {
@@ -90,6 +138,14 @@ int mrvl_md5(const u_int8_t* data, size_t len, char hash[])
 	return 0;
 }
 
+/**
+ * Wrapper for SHA256 hash.
+ *
+ * @param Buffer.
+ * @param Buffer length.
+ * @param Hash.
+ * @returns 0. Always.
+ */
 static
 int mrvl_sha256(const u_int8_t* data, size_t len, char hash[])
 {
@@ -97,6 +153,14 @@ int mrvl_sha256(const u_int8_t* data, size_t len, char hash[])
 	return 0;
 }
 
+/**
+ * Wrapper for SHA384 hash.
+ *
+ * @param Buffer.
+ * @param Buffer length.
+ * @param Hash.
+ * @returns 0. Always.
+ */
 static
 int mrvl_sha384(const u_int8_t* data, size_t len, char hash[])
 {
@@ -104,6 +168,14 @@ int mrvl_sha384(const u_int8_t* data, size_t len, char hash[])
 	return 0;
 }
 
+/**
+ * Wrapper for SHA512 hash.
+ *
+ * @param Buffer.
+ * @param Buffer length.
+ * @param Hash.
+ * @returns 0. Always.
+ */
 static
 int mrvl_sha512(const u_int8_t* data, size_t len, char hash[])
 {
@@ -112,6 +184,15 @@ int mrvl_sha512(const u_int8_t* data, size_t len, char hash[])
 }
 
 /* === Here are actual handlers that should be used in PMD. === */
+/**
+ * MD5 HMAC generation handler.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_md5_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
@@ -119,6 +200,15 @@ int mrvl_md5_hmac_gen(unsigned char key[], int key_len,
 			MD5_AUTH_KEY_LENGTH, mv_md5_hmac_iv, mrvl_md5);
 }
 
+/**
+ * SHA1 HMAC generation handler.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_sha1_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
@@ -126,14 +216,24 @@ int mrvl_sha1_hmac_gen(unsigned char key[], int key_len,
 			SHA1_AUTH_KEY_LENGTH, mv_sha1_hmac_iv, mrvl_sha1);
 }
 
-/* No *224 functions in MUSDK
+#if 0 /* No *224 functions in MUSDK */
 int mrvl_sha224_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
 	return mrvl_generic_hmac_gen(key, key_len, inner, outer,
 			SHA224_AUTH_KEY_LENGTH, mv_sha256_data, mrvl_sha256);
 }
-*/
+#endif
+
+/**
+ * SHA256 HMAC generation handler.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_sha256_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
@@ -141,6 +241,15 @@ int mrvl_sha256_hmac_gen(unsigned char key[], int key_len,
 			SHA256_AUTH_KEY_LENGTH, mv_sha256_hmac_iv, mrvl_sha256);
 }
 
+/**
+ * SHA384 HMAC generation handler.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_sha384_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
@@ -148,11 +257,19 @@ int mrvl_sha384_hmac_gen(unsigned char key[], int key_len,
 			SHA384_AUTH_KEY_LENGTH, mv_sha384_hmac_iv, mrvl_sha384);
 }
 
+/**
+ * SHA512 HMAC generation handler.
+ *
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 int mrvl_sha512_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
 	return mrvl_generic_hmac_gen(key, key_len, inner, outer,
 			SHA512_AUTH_KEY_LENGTH, mv_sha512_hmac_iv, mrvl_sha512);
 }
-
 

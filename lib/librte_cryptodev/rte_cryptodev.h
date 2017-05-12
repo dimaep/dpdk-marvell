@@ -68,6 +68,8 @@ extern "C" {
 /**< KASUMI PMD device name */
 #define CRYPTODEV_NAME_ARMV8_PMD	crypto_armv8
 /**< ARMv8 Crypto PMD device name */
+#define CRYPTODEV_NAME_MRVL_PMD	crypto_mrvl
+/**< Marvell PMD device name */
 #define CRYPTODEV_NAME_SCHEDULER_PMD	crypto_scheduler
 /**< Scheduler Crypto PMD device name */
 

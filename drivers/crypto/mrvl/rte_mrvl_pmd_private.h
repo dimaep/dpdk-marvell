@@ -66,26 +66,30 @@ do {								\
 #define MRVL_CRYPTO_ASSERT(con)
 #endif
 
-#define HMAC_IPAD_VALUE				(0x36)
-#define HMAC_OPAD_VALUE				(0x5C)
+/**
+ * Handy bits->bytes conversion macro.
+ *
+ * Amazingly, there's no such thing defined in DPDK. */
+#define BITS2BYTES(x) ((x) >> 3)
 
-#define NBBY		8		/* Number of bits in a byte */
-#define BYTE_LENGTH(x)	((x) / NBBY) /* Number of bytes in x (round down) */
+/* Key lengths.  */
+#define SHA512_AUTH_KEY_LENGTH		(BITS2BYTES(512))
+#define SHA384_AUTH_KEY_LENGTH		(BITS2BYTES(384))
+#define SHA256_AUTH_KEY_LENGTH		(BITS2BYTES(256))
+#define SHA224_AUTH_KEY_LENGTH		(BITS2BYTES(224))
+#define SHA1_AUTH_KEY_LENGTH		(BITS2BYTES(160))
+#define MD5_AUTH_KEY_LENGTH			(BITS2BYTES(128))
 
-#define SHA512_AUTH_KEY_LENGTH		(BYTE_LENGTH(512))
-#define SHA384_AUTH_KEY_LENGTH		(BYTE_LENGTH(384))
-#define SHA256_AUTH_KEY_LENGTH		(BYTE_LENGTH(256))
-#define SHA224_AUTH_KEY_LENGTH		(BYTE_LENGTH(224))
-#define SHA1_AUTH_KEY_LENGTH		(BYTE_LENGTH(160))
-#define MD5_AUTH_KEY_LENGTH			(BYTE_LENGTH(128))
+/** The longest key's length - currently the winner is SHA512.*/
 #define SHA_AUTH_KEY_MAX			SHA512_AUTH_KEY_LENGTH
 
-#define SHA512_BLOCK_SIZE			(BYTE_LENGTH(512))
+/** SHA512 block length.*/
+#define SHA512_BLOCK_SIZE			(BITS2BYTES(512))
 
+/** The longest block length - currently the winner is again SHA512.*/
 #define SHA_BLOCK_MAX				SHA512_BLOCK_SIZE
 
-#define DMA_MEMSIZE					(2048*1024)
-/** the operation order mode enumerator */
+/** The operation order mode enumerator. */
 enum mrvl_crypto_chain_order {
 	MRVL_CRYPTO_CHAIN_CIPHER_ONLY,
 	MRVL_CRYPTO_CHAIN_AUTH_ONLY,
@@ -95,30 +99,23 @@ enum mrvl_crypto_chain_order {
 	MRVL_CRYPTO_CHAIN_LIST_END = MRVL_CRYPTO_CHAIN_NOT_SUPPORTED
 };
 
+/** The session state enumerator. */
 enum mrvl_session_state {
 	MRVL_SESSION_INVALID = 0,
 	MRVL_SESSION_CONFIGURED,
 	MRVL_SESSION_STARTED
 };
 
-/** the auth mode enumerator */
-enum mrvl_crypto_auth_mode {
-	MRVL_CRYPTO_AUTH_AS_AUTH,
-	MRVL_CRYPTO_AUTH_AS_HMAC,
-	MRVL_CRYPTO_AUTH_AS_CIPHER,
-	MRVL_CRYPTO_AUTH_NOT_SUPPORTED,
-	MRVL_CRYPTO_AUTH_LIST_END = MRVL_CRYPTO_AUTH_NOT_SUPPORTED
-};
-
-enum mrvl_crypto_cipher_keylen {
-	MRVL_CRYPTO_CIPHER_KEYLEN_128,
-	MRVL_CRYPTO_CIPHER_KEYLEN_192,
-	MRVL_CRYPTO_CIPHER_KEYLEN_256,
-	MRVL_CRYPTO_CIPHER_KEYLEN_NOT_SUPPORTED,
-	MRVL_CRYPTO_CIPHER_KEYLEN_LIST_END =
-		MRVL_CRYPTO_CIPHER_KEYLEN_NOT_SUPPORTED
-};
-
+/** Prototype for HMAC IV generation function.
+ *
+ * Each function should generate (fixed-length) inner and outer pads,
+ * basing on variable-length key.
+ * @param key Key array.
+ * @param key_len Length of the key array.
+ * @param inner Inner pad array.
+ * @param outer Outer pad array.
+ * @returns 0 for success, negative value otherwise.
+ */
 typedef int (*mv_hmac_gen_f)(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[]);
 
@@ -128,69 +125,34 @@ struct mrvl_crypto_private {
 	unsigned int max_nb_sessions;	/**< Max number of sessions */
 };
 
-/** Marvell crypto queue pair */
+/** Private crypto queue pair structure. */
 struct mrvl_crypto_qp {
-	uint16_t id; /**< Queue Pair Identifier */
-	//struct rte_ring *processed_ops;/**< Ring for placing process packets */
-	struct sam_cio *cio;
-	struct rte_mempool *sess_mp; /**< Session Mempool */
-	struct rte_cryptodev_stats stats; /**< Queue pair statistics */
-	struct sam_cio_params cio_params;
-	char name[RTE_CRYPTODEV_NAME_LEN]; /**< Unique Queue Pair Name */
+	uint16_t id;						/**< Queue Pair Identifier. */
+	struct sam_cio *cio;	/**< SAM CIO (MUSDK Queue Pair equivalent).*/
+	struct rte_mempool *sess_mp;		/**< Session Mempool. */
+	struct rte_cryptodev_stats stats;	/**< Queue pair statistics. */
+	struct sam_cio_params cio_params; 	/**< CIO initialization parameters.*/
+	char name[RTE_CRYPTODEV_NAME_LEN];	/**< Unique Queue Pair name. */
 } __rte_cache_aligned;
 
-/** Mrvl crypto private session structure */
+/** Private crypto session structure. */
 struct mrvl_crypto_session {
-	enum mrvl_session_state state;
+	enum mrvl_session_state state; /**< Current state of the session.*/
 	struct sam_session_params sam_sess_params;
-	struct sam_sa *sam_sess;
-	struct rte_cryptodev *dev;
-	uint8_t key[256];
+	/**< Session initialization parameters. */
+	struct sam_sa *sam_sess; /**< SAM session pointer. */
+	struct rte_cryptodev *dev; /**< DPDK crypto device pointer.*/
+	uint8_t key[256]; /**< Key used for generating HMAC. */
 
 	struct {
-		uint8_t i_key_pad[SHA_BLOCK_MAX]
-					__rte_cache_aligned;
+		uint8_t i_key_pad[SHA_BLOCK_MAX] __rte_cache_aligned;
 		/**< inner pad (max supported block length) */
-		uint8_t o_key_pad[SHA_BLOCK_MAX]
-					__rte_cache_aligned;
+		uint8_t o_key_pad[SHA_BLOCK_MAX] __rte_cache_aligned;
 		/**< outer pad (max supported block length) */
 		uint8_t key[SHA_AUTH_KEY_MAX];
 		/**< HMAC key (max supported length)*/
 	} auth_hmac;
 
-#if 0
-	enum mrvl_crypto_chain_order chain_order;	/**< chain order mode */
-
-	/** Cipher Parameters */
-	struct {
-		enum rte_crypto_cipher_operation direction;
-		/**< cipher operation direction */
-		enum rte_crypto_cipher_algorithm algo;	/**< cipher algorithm */
-		int iv_len;								/**< IV length */
-
-		struct {
-			uint8_t data[256];					/**< key data */
-			size_t length;						/**< key length in bytes */
-		} key;
-
-		crypto_key_sched_t key_sched;			/**< Key schedule function */
-	} cipher;
-
-	/** Authentication Parameters */
-	struct {
-		enum rte_crypto_auth_operation operation;
-		/**< auth operation generate or verify */
-		enum mrvl_crypto_auth_mode mode;
-		/**< auth operation mode */
-
-		union {
-			struct {
-				/* Add data if needed */
-			} auth;
-
-		};
-	} auth;
-#endif
 } __rte_cache_aligned;
 
 /** Set and validate the crypto session parameters */
@@ -200,6 +162,6 @@ extern int mrvl_crypto_prepare_session_parameters(
 		const struct rte_crypto_sym_xform *xform);
 /** device specific operations function pointer structure */
 
-extern struct rte_cryptodev_ops *rte_mrvl_crypto_pmd_ops;
+extern struct rte_cryptodev_ops mrvl_crypto_pmd_ops;
 
 #endif /* _RTE_MRVL_PMD_PRIVATE_H_ */

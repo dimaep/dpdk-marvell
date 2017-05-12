@@ -36,7 +36,9 @@
 #include <stdbool.h>
 
 /* Unluckily, container_of is defined by both DPDK and MUSDK,
- * we'll use only one version */
+ * we'll declare only one version.
+ *
+ * Note that it is not used in this PMD anyway. */
 #ifdef container_of
 #undef container_of
 #endif
@@ -47,8 +49,8 @@
 #include "lib/mv_sha2.h"
 #include "lib/mv_md5.h"
 
-/* Moved from src/drivers/sam/sam.h */
+/* Moved from (inaccessible) src/drivers/sam/sam.h */
 #define SAM_HW_RING_SIZE       256
-#define SAM_SA_DMABUF_SIZE (64 * 4)
+#define SAM_SA_DMABUF_SIZE (8 * 1024)
 
 #endif /* RTE_MRVL_COMPAT_H_ */
