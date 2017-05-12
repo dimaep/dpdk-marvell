@@ -534,6 +534,25 @@ mrvl_rx_queue_setup(struct rte_eth_dev *dev, uint16_t idx, uint16_t desc,
 	return 0;
 }
 
+static void
+mrvl_rx_queue_release(void *rxq)
+{
+	struct mrvl_rxq *q = rxq;
+	int i, num;
+
+	if (!q)
+		return;
+
+	num = q->priv->ppio_params.inqs_params.tcs_params[0].inqs_params[q->queue_id].size;
+	for (i = 0; i < num; i++) {
+		struct pp2_buff_inf inf;
+
+		pp2_bpool_get_buff(q->priv->hif, q->priv->bpool, &inf);
+	}
+
+	rte_free(q);
+}
+
 static int
 mrvl_tx_queue_setup(struct rte_eth_dev *dev, uint16_t idx, uint16_t desc,
 		    unsigned int socket, const struct rte_eth_txconf *conf)
@@ -561,6 +580,17 @@ mrvl_tx_queue_setup(struct rte_eth_dev *dev, uint16_t idx, uint16_t desc,
 	return 0;
 }
 
+static void
+mrvl_tx_queue_release(void *txq)
+{
+	struct mrvl_txq *q = txq;
+
+	if (!q)
+		return;
+
+	rte_free(q);
+}
+
 static const struct eth_dev_ops mrvl_ops = {
 	.dev_configure = mrvl_dev_configure,
 	.dev_start = mrvl_dev_start,
@@ -586,9 +616,9 @@ static const struct eth_dev_ops mrvl_ops = {
 	.tx_queue_start = NULL,
 	.tx_queue_stop = NULL,
 	.rx_queue_setup = mrvl_rx_queue_setup,
-	.rx_queue_release = NULL,
+	.rx_queue_release = mrvl_rx_queue_release,
 	.tx_queue_setup = mrvl_tx_queue_setup,
-	.tx_queue_release = NULL,
+	.tx_queue_release = mrvl_tx_queue_release,
 	.flow_ctrl_get = NULL,
 	.flow_ctrl_set = NULL,
 	.rss_hash_update = NULL,
