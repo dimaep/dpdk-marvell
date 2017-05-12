@@ -291,8 +291,24 @@ static void
 mrvl_dev_stop(struct rte_eth_dev *dev)
 {
 	struct mrvl_priv *priv = dev->data->dev_private;
+	int i;
 
 	mrvl_dev_set_link_down(dev);
+
+	RTE_LOG(INFO, PMD, "Flusing rx queues\n");
+	for (i = 0; i < dev->data->nb_rx_queues; i++) {
+		int ret, num;
+
+		do {
+			struct mrvl_rxq *q = dev->data->rx_queues[i];
+			struct pp2_ppio_desc descs[MRVL_PP2_RXD_MAX];
+
+			num = MRVL_PP2_RXD_MAX;
+			ret = pp2_ppio_recv(q->priv->ppio, 0, q->queue_id,
+					    descs, (uint16_t *)&num);
+		} while (ret == 0 && num);
+	}
+
 	pp2_ppio_deinit(priv->ppio);
 }
 
