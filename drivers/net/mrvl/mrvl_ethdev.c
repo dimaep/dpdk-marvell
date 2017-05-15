@@ -328,10 +328,9 @@ static int
 mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 {
 	/*
-	 * TODO: how to get that from musdk? in fact there are apis for this
-	 * stuff but not exported to userland (pp2_gop)
+	 * TODO
+	 * once MUSDK provides necessary API use it here
 	 */
-	dev->data->dev_link.link_status = ETH_LINK_UP;
 	/* pass this as parameter? */
 	dev->data->dev_link.link_speed = ETH_SPEED_NUM_10G;
 
