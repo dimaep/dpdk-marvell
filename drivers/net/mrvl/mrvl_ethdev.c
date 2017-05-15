@@ -1256,4 +1256,4 @@ static struct rte_vdev_driver pmd_mrvl_drv = {
 };
 
 RTE_PMD_REGISTER_VDEV(net_mrvl, pmd_mrvl_drv);
-RTE_PMD_REGISTER_ALIAS(net_mrvl, hif);
+RTE_PMD_REGISTER_ALIAS(net_mrvl, eth_mrvl);
