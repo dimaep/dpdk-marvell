@@ -504,7 +504,6 @@ mrvl_rx_queue_setup(struct rte_eth_dev *dev, uint16_t idx, uint16_t desc,
 	struct mrvl_rxq *rxq;
 	int i, ret;
 
-	/* TODO probably that's not enough */
 	if (dev->data->rx_queues[idx]) {
 		rte_free(dev->data->rx_queues[idx]);
 		dev->data->rx_queues[idx] = NULL;
