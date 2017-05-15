@@ -1015,7 +1015,6 @@ mrvl_eth_dev_destroy(const char *name)
 		return;
 
 	priv = eth_dev->data->dev_private;
-	/* TODO: cleanup priv before freeing? */
 	rte_free(priv);
 	rte_free(eth_dev->data->mac_addrs);
 	rte_eth_dev_release_port(eth_dev);
