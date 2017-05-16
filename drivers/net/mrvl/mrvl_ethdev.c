@@ -407,6 +407,8 @@ mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 		dev->data->dev_link.link_speed = ETH_SPEED_NUM_NONE;
 	}
 
+	dev->data->dev_link.link_duplex = edata.duplex ? ETH_LINK_FULL_DUPLEX :
+							 ETH_LINK_HALF_DUPLEX;
 	return 0;
 }
 
