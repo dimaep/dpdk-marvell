@@ -409,6 +409,9 @@ mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 
 	dev->data->dev_link.link_duplex = edata.duplex ? ETH_LINK_FULL_DUPLEX :
 							 ETH_LINK_HALF_DUPLEX;
+	dev->data->dev_link.link_autoneg = edata.autoneg ? ETH_LINK_AUTONEG :
+							   ETH_LINK_FIXED;
+
 	return 0;
 }
 
