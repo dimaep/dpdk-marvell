@@ -44,6 +44,8 @@
 
 #include <assert.h>
 #include <fcntl.h>
+#include <linux/ethtool.h>
+#include <linux/sockios.h>
 #include <net/if.h>
 #include <net/if_arp.h>
 #include <sys/ioctl.h>
@@ -373,8 +375,37 @@ mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 	 * TODO
 	 * once MUSDK provides necessary API use it here
 	 */
-	/* pass this as parameter? */
-	dev->data->dev_link.link_speed = ETH_SPEED_NUM_10G;
+	struct ethtool_cmd edata;
+	struct ifreq req;
+	int ret, fd;
+
+	edata.cmd = ETHTOOL_GSET;
+
+	strcpy(req.ifr_name, dev->data->name);
+	req.ifr_data = &edata;
+
+	fd = socket(AF_INET, SOCK_DGRAM, 0);
+	if (fd == -1)
+		return -EFAULT;
+
+	ret = ioctl(fd, SIOCETHTOOL, &req);
+	if (ret == -1) {
+		close(fd);
+		return -EFAULT;
+	}
+
+	close(fd);
+
+	switch (ethtool_cmd_speed(&edata)) {
+	case SPEED_1000:
+		dev->data->dev_link.link_speed = ETH_SPEED_NUM_1G;
+		break;
+        case SPEED_10000:
+		dev->data->dev_link.link_speed = ETH_SPEED_NUM_10G;
+		break;
+	default:
+		dev->data->dev_link.link_speed = ETH_SPEED_NUM_NONE;
+	}
 
 	return 0;
 }
