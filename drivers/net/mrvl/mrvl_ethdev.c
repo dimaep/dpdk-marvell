@@ -36,6 +36,7 @@
 #include <rte_log.h>
 #include <rte_malloc.h>
 #include <rte_vdev.h>
+#include <rte_cycles.h>
 
 #include <drivers/mv_pp2.h>
 #include <drivers/mv_pp2_bpool.h>
@@ -385,6 +386,8 @@ mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 
 	strcpy(req.ifr_name, dev->data->name);
 	req.ifr_data = &edata;
+
+	rte_delay_ms(100);
 
 	fd = socket(AF_INET, SOCK_DGRAM, 0);
 	if (fd == -1)
