@@ -106,7 +106,6 @@ struct pp2_bpool *mrvl_port_to_bpool_lookup[RTE_MAX_ETHPORTS];
 struct mrvl_shadow_txq {
 	int head;
 	int tail;
-
 	struct pp2_buff_inf infs[MRVL_PP2_TXD_MAX];
 };
 
@@ -122,7 +121,6 @@ struct mrvl_priv {
 	uint8_t ppio_id;
 	uint8_t bpool_bit;
 	uint8_t hif_bit;
-
 	uint8_t rss_hf_tcp;
 
 	struct mrvl_shadow_txq shadow_txq;
@@ -133,7 +131,6 @@ struct mrvl_rxq {
 	struct rte_mempool *mp;
 	int queue_id;
 	int port_id;
-
 	int cksum_enabled;
 };
 
