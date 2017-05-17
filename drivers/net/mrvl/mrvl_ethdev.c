@@ -1054,7 +1054,7 @@ mrvl_priv_create(const char *dev_name)
 	hif_params.out_size = MRVL_PP2_AGGR_TXQD_MAX;
 	ret = pp2_hif_init(&hif_params, &priv->hif);
 	if (ret)
-		goto out_deinit_hif;
+		goto out_deinit_hif_bit;
 
 	priv->dma_addr_high = -1;
 	priv->ppio_params.type = PP2_PPIO_T_NIC;
@@ -1063,8 +1063,7 @@ mrvl_priv_create(const char *dev_name)
 	priv->ppio_params.inqs_params.tcs_params[0].pools[0] = priv->bpool;
 
 	return priv;
-out_deinit_hif:
-	pp2_hif_deinit(priv->hif);
+out_deinit_hif_bit:
 	used_hifs &= ~(1 << priv->hif_bit);
 out_deinit_bpool:
 	pp2_bpool_deinit(priv->bpool);
