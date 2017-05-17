@@ -749,23 +749,23 @@ mrvl_desc_to_packet_type_and_offset(struct pp2_ppio_desc *desc,
 	pp2_ppio_inq_desc_get_l3_info(desc, &l3_type, l3_offset);
 	pp2_ppio_inq_desc_get_l4_info(desc, &l4_type, l4_offset);
 
-	packet_type = RTE_PTYPE_INNER_L2_ETHER;
+	packet_type = RTE_PTYPE_L2_ETHER;
 
 	switch (l3_type) {
 	case PP2_INQ_L3_TYPE_IPV4_NO_OPTS:
-		packet_type |= RTE_PTYPE_INNER_L3_IPV4;
+		packet_type |= RTE_PTYPE_L3_IPV4;
 		break;
 	case PP2_INQ_L3_TYPE_IPV4_OK:
-		packet_type |= RTE_PTYPE_INNER_L3_IPV4_EXT;
+		packet_type |= RTE_PTYPE_L3_IPV4_EXT;
 		break;
 	case PP2_INQ_L3_TYPE_IPV4_TTL_ZERO:
-		packet_type |= RTE_PTYPE_INNER_L3_IPV4_EXT_UNKNOWN;
+		packet_type |= RTE_PTYPE_L3_IPV4_EXT_UNKNOWN;
 		break;
 	case PP2_INQ_L3_TYPE_IPV6_NO_EXT:
-		packet_type |= RTE_PTYPE_INNER_L3_IPV6;
+		packet_type |= RTE_PTYPE_L3_IPV6;
 		break;
 	case PP2_INQ_L3_TYPE_IPV6_EXT:
-		packet_type |= RTE_PTYPE_INNER_L3_IPV6_EXT;
+		packet_type |= RTE_PTYPE_L3_IPV6_EXT;
 		break;
 	default:
 		RTE_LOG(WARNING, PMD, "Failed to recognise l3 packet type\n");
@@ -774,10 +774,10 @@ mrvl_desc_to_packet_type_and_offset(struct pp2_ppio_desc *desc,
 
 	switch (l4_type) {
 	case PP2_INQ_L4_TYPE_TCP:
-		packet_type |= RTE_PTYPE_INNER_L4_TCP;
+		packet_type |= RTE_PTYPE_L4_TCP;
 		break;
 	case PP2_INQ_L4_TYPE_UDP:
-		packet_type |= RTE_PTYPE_INNER_L4_UDP;
+		packet_type |= RTE_PTYPE_L4_UDP;
 		break;
 	default:
 		RTE_LOG(WARNING, PMD, "Failed to recognise l4 packet type\n");
