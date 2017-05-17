@@ -675,7 +675,7 @@ static int
 mrvl_fill_bpool(struct mrvl_rxq *rxq, int num)
 {
 	struct buff_release_entry entries[MRVL_PP2_TXD_MAX];
-	struct rte_mbuf *mbufs[MRVL_PP2_TXD_MAX + 1] = { };
+	struct rte_mbuf *mbufs[MRVL_PP2_TXD_MAX];
 	uint64_t dma_addr;
 	int i, ret;
 
@@ -693,7 +693,7 @@ mrvl_fill_bpool(struct mrvl_rxq *rxq, int num)
 		if (rxq->priv->dma_addr_high != dma_addr >> 32) {
 			RTE_LOG(ERR, PMD, "mbuf outside proper address range\n");
 			ret = -EFAULT;
-			goto out;
+			goto out_free;
 		}
 
 		entries[i].buff.addr = dma_addr;
@@ -703,7 +703,7 @@ mrvl_fill_bpool(struct mrvl_rxq *rxq, int num)
 
 	ret = pp2_bpool_put_buffs(rxq->priv->hif, entries, (uint16_t *)&i);
 	if (ret)
-		goto out;
+		goto out_free;
 	if (i != num) {
 		ret = -1;
 		goto out;
@@ -711,7 +711,18 @@ mrvl_fill_bpool(struct mrvl_rxq *rxq, int num)
 
 	return 0;
 out:
-	for (; i >= 0; i--)
+	for (; i > 0; i--) {
+		struct pp2_buff_inf inf;
+		pp2_bpool_get_buff(rxq->priv->hif, rxq->priv->bpool, &inf);
+		/*
+		 * TODO
+		 * Do more testing to make sure that putting buffers and
+		 * getting them from hw bpool work in LIFO manner.
+		 */
+		assert((struct rte_mbuf *)inf.cookie == mbufs[i]);
+	}
+out_free:
+	for (i = 0; i < num; i++)
 		rte_pktmbuf_free(mbufs[i]);
 
 	return ret;
