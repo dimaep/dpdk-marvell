@@ -860,13 +860,20 @@ mrvl_prepare_proto_info(uint64_t ol_flags, enum pp2_outq_l3_type *l3_type,
 			enum pp2_outq_l4_type *l4_type, int *gen_l3_cksum,
 			int *gen_l4_cksum)
 {
+	/*
+	 * Based on ol_flags prepare information
+	 * for pp2_ppio_outq_desc_set_proto_info() which setups descriptor
+	 * for offloading.
+	 */
 	if (ol_flags & PKT_TX_IPV4) {
 		*l3_type = PP2_OUTQ_L3_TYPE_IPV4;
 		*gen_l3_cksum = ol_flags & PKT_TX_IP_CKSUM ? 1 : 0;
 	} else if (ol_flags & PKT_TX_IPV6) {
 		*l3_type = PP2_OUTQ_L3_TYPE_IPV6;
+		/* no checksum for ipv6 header */
 		*gen_l3_cksum = 0;
 	} else {
+		/* if something different then stop processing */
 		return -1;
 	}
 
@@ -879,6 +886,7 @@ mrvl_prepare_proto_info(uint64_t ol_flags, enum pp2_outq_l3_type *l3_type,
 		*gen_l4_cksum = 1;
 	} else {
 		*l4_type = PP2_OUTQ_L4_TYPE_OTHER;
+		/* no checksum for other type */
 		*gen_l4_cksum = 0;
 	}
 
@@ -912,6 +920,10 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 		pp2_ppio_outq_desc_set_pkt_len(&descs[i],
 					       rte_pktmbuf_pkt_len(mbuf));
 
+		/*
+		 * in case unsupported ol_flags were passed
+		 * do not update descriptor offload information
+		 */
 		ret = mrvl_prepare_proto_info(mbuf->ol_flags, &l3_type,
 					      &l4_type, &gen_l3_cksum,
 					      &gen_l4_cksum);
