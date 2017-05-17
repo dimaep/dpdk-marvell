@@ -182,7 +182,7 @@ mrvl_dev_configure(struct rte_eth_dev *dev)
 
 	if (dev->data->dev_conf.rxmode.mq_mode != ETH_MQ_RX_NONE &&
 	    dev->data->dev_conf.rxmode.mq_mode != ETH_MQ_RX_RSS) {
-		RTE_LOG(INFO, PMD, "Unsupported rx qmode %d\n",
+		RTE_LOG(INFO, PMD, "Unsupported rx multi queue mode %d\n",
 			dev->data->dev_conf.rxmode.mq_mode);
 		return -EINVAL;
 	}
