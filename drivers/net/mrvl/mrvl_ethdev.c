@@ -638,6 +638,7 @@ mrvl_rx_queue_release(void *rxq)
 		struct pp2_buff_inf inf;
 
 		pp2_bpool_get_buff(q->priv->hif, q->priv->bpool, &inf);
+		rte_pktmbuf_free((struct rte_mbuf *)inf.cookie);
 	}
 
 	rte_free(q);
