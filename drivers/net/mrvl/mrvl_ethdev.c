@@ -914,9 +914,19 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 
 	}
 
+	num = nb_pkts;
 	ret = pp2_ppio_send(q->priv->ppio, q->priv->hif, 0, descs, &nb_pkts);
 	if (ret)
 		nb_pkts = 0;
+
+	/* number of packets that were not sent */
+	num -= nb_pkts;
+	if (unlikely(num)) {
+		if (sq->head >= num)
+			sq->head -= num;
+		else
+			sq->head = RTE_DIM(sq->infs) + sq->head - num;
+	}
 
 	pp2_ppio_get_num_outq_done(q->priv->ppio, q->priv->hif, 0, &nb_done);
 
