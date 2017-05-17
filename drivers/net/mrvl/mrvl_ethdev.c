@@ -541,11 +541,13 @@ mrvl_fill_bpool(struct mrvl_rxq *rxq, int num)
 	if (ret)
 		return ret;
 
+	if (rxq->priv->dma_addr_high == -1) {
+		dma_addr = rte_mbuf_data_dma_addr_default(mbufs[0]);
+		rxq->priv->dma_addr_high = dma_addr >> 32;
+	}
+
 	for (i = 0; i < num; i++) {
 		dma_addr = rte_mbuf_data_dma_addr_default(mbufs[i]);
-		if (rxq->priv->dma_addr_high == -1)
-			rxq->priv->dma_addr_high = dma_addr >> 32;
-
 		if (rxq->priv->dma_addr_high != dma_addr >> 32) {
 			RTE_LOG(ERR, PMD, "mbuf outside proper address range\n");
 			ret = -EFAULT;
