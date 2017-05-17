@@ -394,6 +394,12 @@ mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 	close(fd);
 
 	switch (ethtool_cmd_speed(&edata)) {
+	case SPEED_10:
+		dev->data->dev_link.link_speed = ETH_SPEED_NUM_10M;
+		break;
+	case SPEED_100:
+		dev->data->dev_link.link_speed = ETH_SPEED_NUM_100M;
+		break;
 	case SPEED_1000:
 		dev->data->dev_link.link_speed = ETH_SPEED_NUM_1G;
 		break;
