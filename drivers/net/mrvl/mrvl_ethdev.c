@@ -1215,7 +1215,7 @@ rte_pmd_mrvl_probe(const char *name, const char *params)
 
 	return 0;
 out_cleanup:
-	for (; i >= 0; i--)
+	for (; i > 0; i--)
 		mrvl_eth_dev_destroy(ifnames[i]);
 out_deinit_pp2:
 	mrvl_deinit_pp2();
