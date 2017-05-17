@@ -329,14 +329,11 @@ mrvl_dev_start(struct rte_eth_dev *dev)
 }
 
 static void
-mrvl_dev_stop(struct rte_eth_dev *dev)
+mrvl_flush_rx_queues(struct rte_eth_dev *dev)
 {
-	struct mrvl_priv *priv = dev->data->dev_private;
 	int i;
 
-	mrvl_dev_set_link_down(dev);
-
-	RTE_LOG(INFO, PMD, "Flusing rx queues\n");
+	RTE_LOG(INFO, PMD, "Flushing rx queues\n");
 	for (i = 0; i < dev->data->nb_rx_queues; i++) {
 		int ret, num;
 
@@ -349,7 +346,15 @@ mrvl_dev_stop(struct rte_eth_dev *dev)
 					    descs, (uint16_t *)&num);
 		} while (ret == 0 && num);
 	}
+}
 
+static void
+mrvl_dev_stop(struct rte_eth_dev *dev)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+
+	mrvl_dev_set_link_down(dev);
+	mrvl_flush_rx_queues(dev);
 	pp2_ppio_deinit(priv->ppio);
 }
 
