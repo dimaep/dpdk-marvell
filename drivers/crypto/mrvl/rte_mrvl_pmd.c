@@ -43,9 +43,6 @@
 #include "rte_mrvl_pmd_private.h"
 #include "rte_mrvl_hmac.h"
 
-/** Max Burst size. */
-#define MRVL_MAX_BURST_SIZE 64
-
 /**
  * Flag if particular crypto algorithm is supported by PMD/MUSDK.
  *
@@ -83,27 +80,33 @@ static const
 struct cipher_params_mapping cipher_map[RTE_CRYPTO_CIPHER_LIST_END] = {
 	[RTE_CRYPTO_CIPHER_3DES_CBC] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_3DES,	.cipher_mode = SAM_CIPHER_CBC,
+		.cipher_alg = SAM_CIPHER_3DES,
+		.cipher_mode = SAM_CIPHER_CBC,
 		.max_key_len = BITS2BYTES(192) },
 	[RTE_CRYPTO_CIPHER_3DES_CTR] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_3DES,	.cipher_mode = SAM_CIPHER_CTR,
+		.cipher_alg = SAM_CIPHER_3DES,
+		.cipher_mode = SAM_CIPHER_CTR,
 		.max_key_len = BITS2BYTES(192) },
 	[RTE_CRYPTO_CIPHER_3DES_ECB] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_3DES,	.cipher_mode = SAM_CIPHER_ECB,
+		.cipher_alg = SAM_CIPHER_3DES,
+		.cipher_mode = SAM_CIPHER_ECB,
 		.max_key_len = BITS2BYTES(192) },
 	[RTE_CRYPTO_CIPHER_AES_CBC] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_AES,	.cipher_mode = SAM_CIPHER_CBC,
+		.cipher_alg = SAM_CIPHER_AES,
+		.cipher_mode = SAM_CIPHER_CBC,
 		.max_key_len = BITS2BYTES(256) },
 	[RTE_CRYPTO_CIPHER_AES_GCM] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_AES,	.cipher_mode = SAM_CIPHER_GCM,
+		.cipher_alg = SAM_CIPHER_AES,
+		.cipher_mode = SAM_CIPHER_GCM,
 		.max_key_len = BITS2BYTES(256) },
 	[RTE_CRYPTO_CIPHER_AES_CTR] = {
 		.supported = ALGO_SUPPORTED,
-		.cipher_alg = SAM_CIPHER_AES,	.cipher_mode = SAM_CIPHER_CTR,
+		.cipher_alg = SAM_CIPHER_AES,
+		.cipher_mode = SAM_CIPHER_CTR,
 		.max_key_len = BITS2BYTES(256) },
 };
 
@@ -115,42 +118,51 @@ struct auth_params_mapping auth_map[RTE_CRYPTO_AUTH_LIST_END] = {
 	[RTE_CRYPTO_AUTH_MD5_HMAC] = {
 		.supported = ALGO_SUPPORTED,
 		.auth_alg = SAM_AUTH_HMAC_MD5,
-		.hmac_gen_f = mrvl_md5_hmac_gen},
+		.hmac_gen_f = mrvl_md5_hmac_gen },
 	[RTE_CRYPTO_AUTH_MD5] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_MD5},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HASH_MD5 },
 	[RTE_CRYPTO_AUTH_SHA1_HMAC] = {
 		.supported = ALGO_SUPPORTED,
 		.auth_alg = SAM_AUTH_HMAC_SHA1,
-		.hmac_gen_f = mrvl_sha1_hmac_gen},
+		.hmac_gen_f = mrvl_sha1_hmac_gen },
 	[RTE_CRYPTO_AUTH_SHA1] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA1},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HASH_SHA1 },
 		/* No support for HMAC 224 yet in MUSDK crypto. */
 	[RTE_CRYPTO_AUTH_SHA224_HMAC] = {
-		.supported = ALGO_NOT_SUPPORTED, .auth_alg = SAM_AUTH_HMAC_SHA2_224},
+		.supported = ALGO_NOT_SUPPORTED,
+		.auth_alg = SAM_AUTH_HMAC_SHA2_224 },
 	[RTE_CRYPTO_AUTH_SHA224] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_224},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HASH_SHA2_224 },
 	[RTE_CRYPTO_AUTH_SHA256_HMAC] = {
 		.supported = ALGO_SUPPORTED,
 		.auth_alg = SAM_AUTH_HMAC_SHA2_256,
-		.hmac_gen_f = mrvl_sha256_hmac_gen},
+		.hmac_gen_f = mrvl_sha256_hmac_gen },
 	[RTE_CRYPTO_AUTH_SHA256] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_256},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HASH_SHA2_256 },
 	[RTE_CRYPTO_AUTH_SHA384_HMAC] = {
 		.supported = ALGO_SUPPORTED,
 		.auth_alg = SAM_AUTH_HMAC_SHA2_384,
-		.hmac_gen_f = mrvl_sha384_hmac_gen},
+		.hmac_gen_f = mrvl_sha384_hmac_gen },
 	[RTE_CRYPTO_AUTH_SHA384] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_384},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HASH_SHA2_384 },
 	[RTE_CRYPTO_AUTH_SHA512_HMAC] = {
 		.supported = ALGO_SUPPORTED,
 		.auth_alg = SAM_AUTH_HMAC_SHA2_512,
-		.hmac_gen_f = mrvl_sha512_hmac_gen},
+		.hmac_gen_f = mrvl_sha512_hmac_gen },
 	[RTE_CRYPTO_AUTH_SHA512] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_HASH_SHA2_512},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_HASH_SHA2_512 },
 	[RTE_CRYPTO_AUTH_AES_GCM] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_AES_GCM},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_AES_GCM },
 	[RTE_CRYPTO_AUTH_AES_GMAC] = {
-		.supported = ALGO_SUPPORTED, .auth_alg = SAM_AUTH_AES_GMAC},
+		.supported = ALGO_SUPPORTED,
+		.auth_alg = SAM_AUTH_AES_GMAC },
 };
 
 /*
@@ -435,8 +447,7 @@ mrvl_check_buffer_constraints(struct rte_crypto_op *op,
 		MRVL_CRYPTO_LOG_DBG("%d > %d", op->sym->m_src->buf_len,
 				qp->cio_params.max_buf_size);
 		return -1;
-	}
-	else
+	} else
 		return 0;
 }
 
@@ -454,7 +465,7 @@ mrvl_make_sure_session_started(struct rte_crypto_op *op,
 		struct mrvl_crypto_qp *qp)
 {
 	struct mrvl_crypto_session *session =
-			(struct mrvl_crypto_session *) op->sym->session->_private;
+			(struct mrvl_crypto_session *)op->sym->session->_private;
 
 	if (session->state == MRVL_SESSION_CONFIGURED) {
 		/* Need to start session first */
@@ -492,7 +503,7 @@ mrvl_request_prepare(struct sam_cio_op_params *request,
 		struct rte_crypto_op *op)
 {
 	struct mrvl_crypto_session *session =
-			(struct mrvl_crypto_session *) op->sym->session->_private;
+			(struct mrvl_crypto_session *)op->sym->session->_private;
 	uint64_t data_offset;
 
 	/* If application delivered us null dst buffer, it means it expects
@@ -507,28 +518,28 @@ mrvl_request_prepare(struct sam_cio_op_params *request,
 	/* Single buffers only, sorry. */
 	request->num_bufs = 1;
 	request->src = src_bd;
-	src_bd->vaddr = rte_pktmbuf_mtod_offset(op->sym->m_src, void *, 0);
+	src_bd->vaddr = rte_pktmbuf_mtod(op->sym->m_src, void *);
 	data_offset = RTE_PTR_DIFF(src_bd->vaddr, op->sym->m_src->buf_addr);
 	src_bd->paddr = op->sym->m_src->buf_physaddr + data_offset;
-	src_bd->len = op->sym->m_src->buf_len - data_offset;
+	src_bd->len = op->sym->m_src->buf_len + data_offset;
 	request->dst = dst_bd;
-	dst_bd->vaddr = rte_pktmbuf_mtod_offset(op->sym->m_dst, void *, 0);
+	dst_bd->vaddr = rte_pktmbuf_mtod(op->sym->m_dst, void *);
 	data_offset = RTE_PTR_DIFF(dst_bd->vaddr, op->sym->m_dst->buf_addr);
 	dst_bd->paddr = op->sym->m_dst->buf_physaddr + data_offset;
-	dst_bd->len = op->sym->m_dst->buf_len - data_offset;
+	dst_bd->len = op->sym->m_dst->buf_len + data_offset;
 
 	if (op->sym->cipher.data.length > 0) {
 		request->cipher_len = op->sym->cipher.data.length;
 		request->cipher_offset = op->sym->cipher.data.offset;
 		request->cipher_iv = op->sym->cipher.iv.data;
-		//Implicit: cipher_iv_offset = 0
+		request->cipher_iv_offset = 0;
 	}
 
 	if (op->sym->auth.data.length > 0) {
 		request->auth_len = op->sym->auth.data.length;
 		request->auth_offset = op->sym->auth.data.offset;
 		request->auth_aad = op->sym->auth.aad.data;
-		//Implicit: auth_aad_offset = 0
+		request->auth_aad_offset = 0;
 	}
 }
 /*
@@ -550,89 +561,73 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 		struct rte_crypto_op **ops,
 		uint16_t nb_ops)
 {
-	uint16_t i, to_enq = nb_ops, consumed = 0, curr_op = 0;
+	uint16_t iter_ops = 0;
+	uint16_t to_enq = nb_ops;
+	uint16_t consumed = 0;
+	uint16_t iter_req = 0;
 	int ret;
-	struct sam_cio_op_params requests[MRVL_MAX_BURST_SIZE];
+	struct sam_cio_op_params requests[nb_ops];
 	/* DPDK uses single fragment buffers, so we can KISS descriptors.
 	 * SAM does not store bd pointers, so on-stack scope will be enough. */
-	struct sam_buf_info src_bd[MRVL_MAX_BURST_SIZE];
-	struct sam_buf_info dst_bd[MRVL_MAX_BURST_SIZE];
+	struct sam_buf_info src_bd[nb_ops];
+	struct sam_buf_info dst_bd[nb_ops];
 	struct mrvl_crypto_qp *qp = (struct mrvl_crypto_qp *) queue_pair;
 
-	/* PMD burst size is limited by MRVL_MAX_BURST_SIZE. However we may
-	 * receive larger burst requests from DPDK application. We can handle them
-	 * in two ways:
-	 * 1) Fail burst (ugly!)
-	 * 2) Transparently divide burst to sub-bursts of MRVL_MAX_BURST_SIZE
-	 *    and try to send all packets. */
-	while (nb_ops > 0) {
-		to_enq = RTE_MIN(nb_ops, MRVL_MAX_BURST_SIZE);
+	if (nb_ops == 0)
+		return 0;
 
-		/* Prepare the sub-burst. */
-		memset(&requests, 0, sizeof (requests[0]) * to_enq);
+	/* Prepare the burst. */
+	memset(&requests, 0, sizeof(requests));
 
-		/* Iterate through */
-		for (i = 0; i < to_enq; ++i, ++curr_op) {
-			if ((mrvl_make_sure_session_started(ops[curr_op], qp) < 0) ||
-				(mrvl_check_buffer_constraints(ops[curr_op], qp) < 0)) {
-				MRVL_CRYPTO_LOG_ERR("Error while parameters preparation!");
-				qp->stats.enqueue_err_count++;
-				ops[curr_op]->status = RTE_CRYPTO_OP_STATUS_ERROR;
-				/* Rollback index to reuse request slot. */
-				--i;
+	/* Iterate through */
+	for (; iter_ops < nb_ops; ++iter_ops, ++iter_req) {
+		if ((mrvl_make_sure_session_started(ops[iter_ops], qp) < 0) ||
+			(mrvl_check_buffer_constraints(ops[iter_ops], qp) < 0)) {
+			MRVL_CRYPTO_LOG_ERR("Error while parameters preparation!");
+			qp->stats.enqueue_err_count++;
+			ops[iter_ops]->status = RTE_CRYPTO_OP_STATUS_ERROR;
+			/* Rollback index to reuse request slot. */
+			--iter_req;
 
-				/* Decrease the number of ops to send.
-				 * This is a bit less optimal, but cleaner solution.*/
-				--to_enq;
+			/* Decrease the number of ops to enqueue. */
+			--to_enq;
 
-				/* Decrease nb_ops to make up for ops lacking in
-				 * sam_cio_enq(). */
-				--nb_ops;
+			/* Number of handled ops is increased (even if the result
+			 * of handling is error). */
+			++consumed;
+		} else {
+			/* If we're sure the session is started successfully,
+			 * we can proceed filling in the request.*/
+			mrvl_request_prepare(
+					&requests[iter_req], &src_bd[iter_req], &dst_bd[iter_req],
+					ops[iter_ops]);
 
-				/* Number of handled ops is increased (even if the result
-				 * of handling is error). */
-				++consumed;
-			} else {
+			/* Assume enqueue will succeed. */
+			ops[iter_ops]->status = RTE_CRYPTO_OP_STATUS_ENQUEUED;
+		}
+	} /* for (i = 0; i < to_enq;... */
 
-				/* If we're sure the session is started successfully,
-				 * we can proceed filling in the request.*/
-				mrvl_request_prepare(&requests[i], &src_bd[i], &dst_bd[i],
-						ops[curr_op]);
+	if (to_enq > 0) {
+		/* Send the burst */
+		ret = sam_cio_enq(qp->cio, requests, &to_enq);
+		consumed += to_enq;
+		if (ret < 0) {
+			/* Trust SAM that in this case returned value will be at
+			 * some point correct (now it is returned unmodified).*/
+			qp->stats.enqueue_err_count += to_enq;
+		}
+	}
 
-				/* Assume enqueue will succeed. */
-				ops[curr_op]->status = RTE_CRYPTO_OP_STATUS_ENQUEUED;
-			}
-		} /* for (i = 0; i < to_enq;... */
-
-		if (i > 0) {
-			/* Send the burst */
-			ret = sam_cio_enq(qp->cio, requests, &i);
-			consumed += i;
-			if (ret < 0) {
-				qp->stats.enqueue_err_count += i;
-				break;
-			}
-			nb_ops -= i;
+	if (consumed < nb_ops) {
+		/* No room to send more.
+		 * Correct the state of the rest of requests. */
+		for (iter_ops = consumed; iter_ops < nb_ops; ++iter_ops) {
+			if (ops[iter_ops]->status == RTE_CRYPTO_OP_STATUS_ENQUEUED) {
+				ops[iter_ops]->status = RTE_CRYPTO_OP_STATUS_NOT_PROCESSED;
+			} /* Leve out errors. */
 		}
 
-		if (i < to_enq) {
-			/* No room to send more.
-			 * Correct the state of the rest of requests. */
-			for (; i < to_enq; ++i) {
-				--curr_op;
-				if (ops[curr_op]->status == RTE_CRYPTO_OP_STATUS_ENQUEUED) {
-					ops[curr_op]->status = RTE_CRYPTO_OP_STATUS_NOT_PROCESSED;
-					continue;
-				}
-
-				/* Error state ops were never set to be enqueued,
-				 * we must go one op further. */
-				++to_enq;
-			}
-
-			break;
-		}
-	} /* while (nb_ops > 0) */
+	}
 
 	qp->stats.enqueued_count += consumed;
 	return consumed;
@@ -654,41 +649,34 @@ mrvl_crypto_pmd_dequeue_burst(void *queue_pair ,
 	int ret;
 	struct mrvl_crypto_qp *qp = queue_pair;
 	struct sam_cio *cio = qp->cio;
-	struct sam_cio_op_result results[MRVL_MAX_BURST_SIZE];
-	uint16_t i, to_deq, tgt_ops, dequeued_total = 0;
+	struct sam_cio_op_result results[nb_ops];
+	uint16_t i;
 
-	while (nb_ops > 0) {
-		to_deq = tgt_ops = RTE_MIN(nb_ops, MRVL_MAX_BURST_SIZE);
+	ret = sam_cio_deq(cio, results, &nb_ops);
+	if (ret < 0) {
+		/* Count all dequeued as error. */
+		qp->stats.dequeue_err_count += nb_ops;
 
-		ret = sam_cio_deq(cio, results, &to_deq);
-		if (ret) {
-			/* Error */
-			qp->stats.dequeue_err_count++;
-			break;
-		}
+		/* But act as they were dequeued anyway*/
+		qp->stats.dequeued_count += nb_ops;
 
-		/* Unpack results. */
-		for (i = 0; i < to_deq; ++i) {
-			ops[dequeued_total] = results[i].cookie;
-			if (results[i].status != SAM_CIO_OK) {
-				MRVL_CRYPTO_LOG_DBG(
-						"CIO returned Error: %d", results[i].status);
-				ops[dequeued_total]->status = RTE_CRYPTO_OP_STATUS_ERROR;
-			} else {
-				ops[dequeued_total]->status = RTE_CRYPTO_OP_STATUS_SUCCESS;
-			}
-			dequeued_total++;
-		}
+		return 0;
+	}
 
-		nb_ops -= to_deq;
-
-		if (to_deq < tgt_ops) {
-			/* SAM returned less than asked, probably no more to dequeue. */
-			break;
+	/* Unpack results. */
+	for (i = 0; i < nb_ops; ++i) {
+		ops[i] = results[i].cookie;
+		if (results[i].status != SAM_CIO_OK) {
+			MRVL_CRYPTO_LOG_DBG(
+					"CIO returned Error: %d", results[i].status);
+			ops[i]->status = RTE_CRYPTO_OP_STATUS_ERROR;
+		} else {
+			ops[i]->status = RTE_CRYPTO_OP_STATUS_SUCCESS;
 		}
 	}
-	qp->stats.dequeued_count += dequeued_total;
-	return dequeued_total;
+
+	qp->stats.dequeued_count += nb_ops;
+	return nb_ops;
 }
 
 /**

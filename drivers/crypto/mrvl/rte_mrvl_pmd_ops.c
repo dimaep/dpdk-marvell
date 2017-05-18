@@ -604,15 +604,16 @@ mrvl_crypto_pmd_qp_setup(struct rte_cryptodev *dev, uint16_t qp_id,
 	uint32_t descriptors = (qp_conf->nb_descriptors > SAM_HW_RING_SIZE) ?
 			SAM_HW_RING_SIZE : qp_conf->nb_descriptors;
 
-	/* Free memory prior to re-allocation if needed. */
-	if (dev->data->queue_pairs[qp_id] != NULL)
-		mrvl_crypto_pmd_qp_release(dev, qp_id);
-
 	/* Allocate the queue pair data structure. */
 	qp = rte_zmalloc_socket("MRVL Crypto PMD Queue Pair", sizeof(*qp),
 					RTE_CACHE_LINE_SIZE, socket_id);
 	if (qp == NULL)
 		return -ENOMEM;
+
+	/* Free old qp prior setup if needed. */
+	if (dev->data->queue_pairs[qp_id] != NULL)
+		mrvl_crypto_pmd_qp_release(dev, qp_id);
+
 	do { /* Error handling block */
 		qp->id = qp_id;
 
@@ -700,7 +701,7 @@ static void *
 mrvl_crypto_pmd_session_configure(struct rte_cryptodev *dev,
 		struct rte_crypto_sym_xform *xform, void *sess)
 {
-	if (unlikely(sess == NULL)) {
+	if (sess == NULL) {
 		MRVL_CRYPTO_LOG_ERR("NULL session struct");
 		return NULL;
 	}
@@ -725,16 +726,18 @@ mrvl_crypto_pmd_session_clear(struct rte_cryptodev *dev __rte_unused,
 				void *sess)
 {
 	struct mrvl_crypto_session *mrvl_sess =
-			(struct mrvl_crypto_session *) sess;
+			(struct mrvl_crypto_session *)sess;
 
-	if (sess) {
-		if (mrvl_sess->sam_sess &&
-				sam_session_destroy(mrvl_sess->sam_sess) < 0) {
-			MRVL_CRYPTO_LOG_INFO("Error while destroying session!");
-		}
-		/* Zero out the whole structure */
-		memset(sess, 0, sizeof(struct mrvl_crypto_session));
+	if (!sess)
+		return;
+
+	if (mrvl_sess->sam_sess &&
+			sam_session_destroy(mrvl_sess->sam_sess) < 0) {
+		MRVL_CRYPTO_LOG_INFO("Error while destroying session!");
 	}
+	/* Zero out the whole structure */
+	memset(sess, 0, sizeof(struct mrvl_crypto_session));
+
 }
 
 /**

@@ -45,7 +45,7 @@
  * @param Inner pad array.
  * @param Outer pad array.
  */
-typedef void (*mrvl_iv_f)(unsigned char[], int ,
+typedef void (*mrvl_iv_f)(unsigned char[], int,
 			unsigned char[], unsigned char[]);
 
 /**
@@ -88,7 +88,7 @@ int mrvl_generic_hmac_gen(unsigned char key[], int key_len,
 		 * In case the key is longer than max_key_len bits
 		 * the algorithm will hash the key instead.
 		 */
-		error = hash_f(key, key_len, (char*) sess_key);
+		error = hash_f(key, key_len, (char *)sess_key);
 		if (error != 0)
 			return -1;
 	} else {
@@ -101,7 +101,7 @@ int mrvl_generic_hmac_gen(unsigned char key[], int key_len,
 		rte_memcpy(sess_key, key, key_len);
 	}
 
-	iv_f (sess_key, key_len, inner, outer);
+	iv_f(sess_key, key_len, inner, outer);
 	return 0;
 }
 

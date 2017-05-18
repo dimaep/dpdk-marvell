@@ -69,22 +69,22 @@ do {								\
 /**
  * Handy bits->bytes conversion macro.
  *
- * Amazingly, there's no such thing defined in DPDK. */
+ * Amazingly, there's no such thing globally defined in DPDK. */
 #define BITS2BYTES(x) ((x) >> 3)
 
 /* Key lengths.  */
-#define SHA512_AUTH_KEY_LENGTH		(BITS2BYTES(512))
-#define SHA384_AUTH_KEY_LENGTH		(BITS2BYTES(384))
-#define SHA256_AUTH_KEY_LENGTH		(BITS2BYTES(256))
-#define SHA224_AUTH_KEY_LENGTH		(BITS2BYTES(224))
-#define SHA1_AUTH_KEY_LENGTH		(BITS2BYTES(160))
-#define MD5_AUTH_KEY_LENGTH			(BITS2BYTES(128))
+#define SHA512_AUTH_KEY_LENGTH		BITS2BYTES(512)
+#define SHA384_AUTH_KEY_LENGTH		BITS2BYTES(384)
+#define SHA256_AUTH_KEY_LENGTH		BITS2BYTES(256)
+#define SHA224_AUTH_KEY_LENGTH		BITS2BYTES(224)
+#define SHA1_AUTH_KEY_LENGTH		BITS2BYTES(160)
+#define MD5_AUTH_KEY_LENGTH			BITS2BYTES(128)
 
 /** The longest key's length - currently the winner is SHA512.*/
 #define SHA_AUTH_KEY_MAX			SHA512_AUTH_KEY_LENGTH
 
 /** SHA512 block length.*/
-#define SHA512_BLOCK_SIZE			(BITS2BYTES(512))
+#define SHA512_BLOCK_SIZE			BITS2BYTES(512)
 
 /** The longest block length - currently the winner is again SHA512.*/
 #define SHA_BLOCK_MAX				SHA512_BLOCK_SIZE
