@@ -134,8 +134,6 @@ struct mrvl_priv {
 	uint8_t bpool_bit;
 	uint8_t hif_bit;
 	uint8_t rss_hf_tcp;
-
-	struct mrvl_shadow_txq shadow_txq;
 };
 
 struct mrvl_rxq {
@@ -149,7 +147,17 @@ struct mrvl_rxq {
 struct mrvl_txq {
 	struct mrvl_priv *priv;
 	int queue_id;
+	int port_id;
 };
+
+/*
+ * Every tx queue should have dedicated shadow tx queue.
+ *
+ * Ports assigned by DPDK might not start at zero or be continuous so
+ * as a workaround define shadow queues for each possible port so that
+ * we eventually fit somewhere.
+ */
+struct mrvl_shadow_txq shadow_txqs[RTE_MAX_ETHPORTS][MRVL_PP2_TXQ_MAX];
 
 static inline int
 mrvl_reserve_bit(int *bitmap, int max)
@@ -677,6 +685,7 @@ mrvl_tx_queue_setup(struct rte_eth_dev *dev, uint16_t idx, uint16_t desc,
 
 	txq->priv = priv;
 	txq->queue_id = idx;
+	txq->port_id = dev->data->port_id;
 	dev->data->tx_queues[idx] = txq;
 
 	priv->ppio_params.outqs_params.outqs_params[idx].size = desc;
@@ -912,7 +921,7 @@ static uint16_t
 mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 {
 	struct mrvl_txq *q = txq;
-	struct mrvl_shadow_txq *sq = &q->priv->shadow_txq;
+	struct mrvl_shadow_txq *sq = &shadow_txqs[q->port_id][q->queue_id];
 	struct buff_release_entry entries[MRVL_PP2_TXD_MAX];
 	struct pp2_ppio_desc descs[nb_pkts];
 	uint16_t num, nb_done;
