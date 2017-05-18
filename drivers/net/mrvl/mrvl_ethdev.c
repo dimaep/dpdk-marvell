@@ -962,7 +962,7 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 	}
 
 	num = nb_pkts;
-	ret = pp2_ppio_send(q->priv->ppio, q->priv->hif, 0, descs, &nb_pkts);
+	ret = pp2_ppio_send(q->priv->ppio, q->priv->hif, q->queue_id, descs, &nb_pkts);
 	if (ret)
 		nb_pkts = 0;
 
@@ -975,7 +975,7 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 			sq->head = RTE_DIM(sq->infs) + sq->head - num;
 	}
 
-	pp2_ppio_get_num_outq_done(q->priv->ppio, q->priv->hif, 0, &nb_done);
+	pp2_ppio_get_num_outq_done(q->priv->ppio, q->priv->hif, q->queue_id, &nb_done);
 
 	for (i = 0, j = 0, num = 0; i < nb_done; i++) {
 		struct pp2_buff_inf *inf = &sq->infs[sq->tail];
