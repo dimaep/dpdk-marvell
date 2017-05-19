@@ -711,12 +711,15 @@ mrvl_crypto_pmd_session_configure(struct rte_cryptodev *dev,
 		MRVL_CRYPTO_LOG_ERR("Failed to configure session parameters.");
 		return NULL;
 	}
-	/* Session initialization can be done only later, when first packet arrives
-	 * for correct qpair, so we know cio. */
+	/*
+	 * Session initialization can be done only later,
+	 * when first packet arrives for correct qpair, so we know cio.
+	 */
 	return sess;
 }
 
-/** Clear the memory of session so it doesn't leave key material behind (PMD ops callback).
+/**
+ * Clear the memory of session so it doesn't leave key material behind.
  *
  * @param dev Pointer to the device structure.
  * @returns 0. Always.

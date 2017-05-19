@@ -63,7 +63,7 @@ typedef int (*mrvl_hash_f)(const u_int8_t*, size_t, char[]);
 /**
  * Generate HMAC for various alorithms.
  *
- * The HMAC-generation algorithm is pretty much hash-agnostic.
+ * The HMAC pads-generation algorithm is pretty much hash-agnostic.
  * Therefore we can construct the below generic function, with the help
  * of MUSDK routines for IV/hash generation.
  * @param key Key array.
@@ -76,9 +76,9 @@ typedef int (*mrvl_hash_f)(const u_int8_t*, size_t, char[]);
  * @returns 0 for success, negative value otherwise.
  */
 static
-int mrvl_generic_hmac_gen(unsigned char key[], int key_len,
+int mrvl_generic_hmac_pads_gen(unsigned char key[], int key_len,
 			unsigned char inner[], unsigned char outer[],
-			int max_key_len, mrvl_iv_f iv_f, mrvl_hash_f hash_f)
+			int max_key_len, mrvl_iv_f hmac_pad_gen_f, mrvl_hash_f hash_f)
 {
 	unsigned char sess_key[SHA_AUTH_KEY_MAX] = {0};
 	int error;
@@ -101,12 +101,14 @@ int mrvl_generic_hmac_gen(unsigned char key[], int key_len,
 		rte_memcpy(sess_key, key, key_len);
 	}
 
-	iv_f(sess_key, key_len, inner, outer);
+	hmac_pad_gen_f(sess_key, key_len, inner, outer);
 	return 0;
 }
 
-/* === As MUSDK hash functions do not have the same prototype, we need ===
- * === to wrap them to use in generic manner.                          === */
+/*
+ * === As MUSDK hash functions do not have the same prototype, we need ===
+ * === to wrap them to use in generic manner.                          ===
+ */
 
 /**
  * Wrapper for SHA1 hash.
@@ -117,7 +119,7 @@ int mrvl_generic_hmac_gen(unsigned char key[], int key_len,
  * @returns 0. Always.
  */
 static
-int mrvl_sha1(const u_int8_t* data, size_t len, char hash[])
+int mrvl_sha1(const u_int8_t *data, size_t len, char hash[])
 {
 	mv_sha1(data, len, (unsigned char *)hash);
 	return 0;
@@ -132,7 +134,7 @@ int mrvl_sha1(const u_int8_t* data, size_t len, char hash[])
  * @returns 0. Always.
  */
 static
-int mrvl_md5(const u_int8_t* data, size_t len, char hash[])
+int mrvl_md5(const u_int8_t *data, size_t len, char hash[])
 {
 	mv_md5(data, len, (unsigned char *)hash);
 	return 0;
@@ -147,7 +149,7 @@ int mrvl_md5(const u_int8_t* data, size_t len, char hash[])
  * @returns 0. Always.
  */
 static
-int mrvl_sha256(const u_int8_t* data, size_t len, char hash[])
+int mrvl_sha256(const u_int8_t *data, size_t len, char hash[])
 {
 	(void) mv_sha256_data(data, len, hash);
 	return 0;
@@ -162,7 +164,7 @@ int mrvl_sha256(const u_int8_t* data, size_t len, char hash[])
  * @returns 0. Always.
  */
 static
-int mrvl_sha384(const u_int8_t* data, size_t len, char hash[])
+int mrvl_sha384(const u_int8_t *data, size_t len, char hash[])
 {
 	(void) mv_sha384_data(data, len, hash);
 	return 0;
@@ -177,7 +179,7 @@ int mrvl_sha384(const u_int8_t* data, size_t len, char hash[])
  * @returns 0. Always.
  */
 static
-int mrvl_sha512(const u_int8_t* data, size_t len, char hash[])
+int mrvl_sha512(const u_int8_t *data, size_t len, char hash[])
 {
 	(void) mv_sha512_data(data, len, hash);
 	return 0;
@@ -196,7 +198,7 @@ int mrvl_sha512(const u_int8_t* data, size_t len, char hash[])
 int mrvl_md5_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
-	return mrvl_generic_hmac_gen(key, key_len, inner, outer,
+	return mrvl_generic_hmac_pads_gen(key, key_len, inner, outer,
 			MD5_AUTH_KEY_LENGTH, mv_md5_hmac_iv, mrvl_md5);
 }
 
@@ -212,7 +214,7 @@ int mrvl_md5_hmac_gen(unsigned char key[], int key_len,
 int mrvl_sha1_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
-	return mrvl_generic_hmac_gen(key, key_len, inner, outer,
+	return mrvl_generic_hmac_pads_gen(key, key_len, inner, outer,
 			SHA1_AUTH_KEY_LENGTH, mv_sha1_hmac_iv, mrvl_sha1);
 }
 
@@ -220,7 +222,7 @@ int mrvl_sha1_hmac_gen(unsigned char key[], int key_len,
 int mrvl_sha224_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
-	return mrvl_generic_hmac_gen(key, key_len, inner, outer,
+	return mrvl_generic_hmac_pads_gen(key, key_len, inner, outer,
 			SHA224_AUTH_KEY_LENGTH, mv_sha256_data, mrvl_sha256);
 }
 #endif
@@ -237,7 +239,7 @@ int mrvl_sha224_hmac_gen(unsigned char key[], int key_len,
 int mrvl_sha256_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
-	return mrvl_generic_hmac_gen(key, key_len, inner, outer,
+	return mrvl_generic_hmac_pads_gen(key, key_len, inner, outer,
 			SHA256_AUTH_KEY_LENGTH, mv_sha256_hmac_iv, mrvl_sha256);
 }
 
@@ -253,7 +255,7 @@ int mrvl_sha256_hmac_gen(unsigned char key[], int key_len,
 int mrvl_sha384_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
-	return mrvl_generic_hmac_gen(key, key_len, inner, outer,
+	return mrvl_generic_hmac_pads_gen(key, key_len, inner, outer,
 			SHA384_AUTH_KEY_LENGTH, mv_sha384_hmac_iv, mrvl_sha384);
 }
 
@@ -269,7 +271,7 @@ int mrvl_sha384_hmac_gen(unsigned char key[], int key_len,
 int mrvl_sha512_hmac_gen(unsigned char key[], int key_len,
 		     unsigned char inner[], unsigned char outer[])
 {
-	return mrvl_generic_hmac_gen(key, key_len, inner, outer,
+	return mrvl_generic_hmac_pads_gen(key, key_len, inner, outer,
 			SHA512_AUTH_KEY_LENGTH, mv_sha512_hmac_iv, mrvl_sha512);
 }
 

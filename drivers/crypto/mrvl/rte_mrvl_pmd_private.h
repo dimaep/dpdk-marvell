@@ -69,7 +69,8 @@ do {								\
 /**
  * Handy bits->bytes conversion macro.
  *
- * Amazingly, there's no such thing globally defined in DPDK. */
+ * Amazingly, there's no such thing globally defined in DPDK.
+ */
 #define BITS2BYTES(x) ((x) >> 3)
 
 /* Key lengths.  */
@@ -121,36 +122,58 @@ typedef int (*mv_hmac_gen_f)(unsigned char key[], int key_len,
 
 /** Private data structure for each crypto device. */
 struct mrvl_crypto_private {
-	unsigned int max_nb_qpairs; 	/**< Max number of queue pairs */
+	unsigned int max_nb_qpairs;	/**< Max number of queue pairs */
 	unsigned int max_nb_sessions;	/**< Max number of sessions */
 };
 
 /** Private crypto queue pair structure. */
 struct mrvl_crypto_qp {
-	uint16_t id;						/**< Queue Pair Identifier. */
-	struct sam_cio *cio;	/**< SAM CIO (MUSDK Queue Pair equivalent).*/
-	struct rte_mempool *sess_mp;		/**< Session Mempool. */
-	struct rte_cryptodev_stats stats;	/**< Queue pair statistics. */
-	struct sam_cio_params cio_params; 	/**< CIO initialization parameters.*/
-	char name[RTE_CRYPTODEV_NAME_LEN];	/**< Unique Queue Pair name. */
+	/** Queue Pair Identifier. */
+	uint16_t id;
+
+	/** SAM CIO (MUSDK Queue Pair equivalent).*/
+	struct sam_cio *cio;
+
+	/** Session Mempool. */
+	struct rte_mempool *sess_mp;
+
+	/** Queue pair statistics. */
+	struct rte_cryptodev_stats stats;
+
+	/** CIO initialization parameters.*/
+	struct sam_cio_params cio_params;
+
+	/** Unique Queue Pair name. */
+	char name[RTE_CRYPTODEV_NAME_LEN];
 } __rte_cache_aligned;
 
 /** Private crypto session structure. */
 struct mrvl_crypto_session {
-	enum mrvl_session_state state; /**< Current state of the session.*/
-	struct sam_session_params sam_sess_params;
-	/**< Session initialization parameters. */
-	struct sam_sa *sam_sess; /**< SAM session pointer. */
-	struct rte_cryptodev *dev; /**< DPDK crypto device pointer.*/
-	uint8_t key[256]; /**< Key used for generating HMAC. */
+	/** Current state of the session.*/
+	enum mrvl_session_state state;
 
+	/** Session initialization parameters. */
+	struct sam_session_params sam_sess_params;
+
+	/** SAM session pointer. */
+	struct sam_sa *sam_sess;
+
+	/** DPDK crypto device pointer.*/
+	struct rte_cryptodev *dev;
+
+	/** Key used for generating HMAC. */
+	uint8_t key[256];
+
+	/** HMAC data. */
 	struct {
+		/** Inner pad (max supported block length). */
 		uint8_t i_key_pad[SHA_BLOCK_MAX] __rte_cache_aligned;
-		/**< inner pad (max supported block length) */
+
+		/** Outer pad (max supported block length). */
 		uint8_t o_key_pad[SHA_BLOCK_MAX] __rte_cache_aligned;
-		/**< outer pad (max supported block length) */
+
+		/** HMAC key (max supported length). */
 		uint8_t key[SHA_AUTH_KEY_MAX];
-		/**< HMAC key (max supported length)*/
 	} auth_hmac;
 
 } __rte_cache_aligned;

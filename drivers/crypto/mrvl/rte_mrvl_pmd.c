@@ -48,7 +48,8 @@
  *
  * The idea is to have Not Supported value as default (0).
  * This way we need only to define proper map sizes,
- * non-initialized entries will be by default not supported. */
+ * non-initialized entries will be by default not supported.
+ */
 enum algo_supported {
 	ALGO_NOT_SUPPORTED = 0,
 	ALGO_SUPPORTED = 1,
@@ -68,7 +69,8 @@ __rte_aligned(32);
 struct auth_params_mapping {
 	enum algo_supported supported;  /**< On/off switch */
 	enum sam_auth_alg   auth_alg;   /**< Auth algorithm */
-	mv_hmac_gen_f       hmac_gen_f; /**< Function pointer for HMAC generator */
+	mv_hmac_gen_f       hmac_gen_f;
+	/**< Function pointer for HMAC generator*/
 }
 /* We want to squeeze in multiple maps into the cache line. */
 __rte_aligned(32);
@@ -192,13 +194,13 @@ mrvl_crypto_get_chain_order(const struct rte_crypto_sym_xform *xform)
 		return MRVL_CRYPTO_CHAIN_NOT_SUPPORTED;
 
 	if (xform->next != NULL) {
-		if ( (xform->type == RTE_CRYPTO_SYM_XFORM_AUTH) &&
-			 (xform->next->type == RTE_CRYPTO_SYM_XFORM_CIPHER) )
+		if ((xform->type == RTE_CRYPTO_SYM_XFORM_AUTH) &&
+			(xform->next->type == RTE_CRYPTO_SYM_XFORM_CIPHER))
 			return MRVL_CRYPTO_CHAIN_AUTH_CIPHER;
 
-		if ( (xform->type == RTE_CRYPTO_SYM_XFORM_CIPHER) &&
-			 (xform->next->type == RTE_CRYPTO_SYM_XFORM_AUTH) )
-				return MRVL_CRYPTO_CHAIN_CIPHER_AUTH;
+		if ((xform->type == RTE_CRYPTO_SYM_XFORM_CIPHER) &&
+			(xform->next->type == RTE_CRYPTO_SYM_XFORM_AUTH))
+			return MRVL_CRYPTO_CHAIN_CIPHER_AUTH;
 	} else {
 		if (xform->type == RTE_CRYPTO_SYM_XFORM_AUTH)
 			return MRVL_CRYPTO_CHAIN_AUTH_ONLY;
@@ -251,7 +253,8 @@ mrvl_crypto_set_cipher_session_parameters(struct mrvl_crypto_session *sess,
 
 	/* See if map data is present and valid */
 	if ((cipher_xform->cipher.algo > RTE_DIM(cipher_map)) ||
-		(cipher_map[cipher_xform->cipher.algo].supported != ALGO_SUPPORTED)) {
+		(cipher_map[cipher_xform->cipher.algo].supported
+			!= ALGO_SUPPORTED)) {
 		MRVL_CRYPTO_LOG_ERR("Cipher algorithm not supported!");
 		return -EINVAL;
 	}
@@ -266,13 +269,13 @@ mrvl_crypto_set_cipher_session_parameters(struct mrvl_crypto_session *sess,
 
 	/* Get max key length. */
 	if (cipher_xform->cipher.key.length >
-		(cipher_map[cipher_xform->cipher.algo].max_key_len) ) {
+		cipher_map[cipher_xform->cipher.algo].max_key_len) {
 		MRVL_CRYPTO_LOG_ERR("Wrong key length!");
 		return -EINVAL;
 	}
 
 	sess->sam_sess_params.cipher_key_len = cipher_xform->cipher.key.length;
-	memcpy(sess->key, cipher_xform->cipher.key.data,
+	rte_memcpy(sess->key, cipher_xform->cipher.key.data,
 			cipher_xform->cipher.key.length);
 	sess->sam_sess_params.cipher_key = sess->key;
 	return 0;
@@ -301,7 +304,8 @@ mrvl_crypto_set_auth_session_parameters(struct mrvl_crypto_session *sess,
 		return -EINVAL;
 	}
 
-	sess->sam_sess_params.auth_alg = auth_map[auth_xform->auth.algo].auth_alg;
+	sess->sam_sess_params.auth_alg =
+		auth_map[auth_xform->auth.algo].auth_alg;
 	sess->sam_sess_params.auth_aad_len =
 		auth_xform->auth.add_auth_data_length;
 	sess->sam_sess_params.auth_icv_len = auth_xform->auth.digest_length;
@@ -328,32 +332,38 @@ mrvl_crypto_set_session_parameters(struct mrvl_crypto_session *sess,
 	/* Select cipher direction */
 	if (cipher_xform != NULL) {
 		sess->sam_sess_params.dir =
-			(cipher_xform->cipher.op == RTE_CRYPTO_CIPHER_OP_ENCRYPT) ?
-						SAM_DIR_ENCRYPT :
-						SAM_DIR_DECRYPT;
+			(cipher_xform->cipher.op
+				== RTE_CRYPTO_CIPHER_OP_ENCRYPT) ?
+					SAM_DIR_ENCRYPT :
+					SAM_DIR_DECRYPT;
 	} else if (auth_xform != NULL) {
 		sess->sam_sess_params.dir =
-			(auth_xform->auth.op == RTE_CRYPTO_AUTH_OP_GENERATE) ?
-						SAM_DIR_ENCRYPT :
-						SAM_DIR_DECRYPT;
+			(auth_xform->auth.op
+				== RTE_CRYPTO_AUTH_OP_GENERATE) ?
+					SAM_DIR_ENCRYPT :
+					SAM_DIR_DECRYPT;
 	} else {
 		/* Having empty both cipher and algo is definitely an error */
 		return -EINVAL;
 	}
 
 	if ((cipher_xform != NULL) &&
-		(mrvl_crypto_set_cipher_session_parameters(sess, cipher_xform) < 0)) {
+		(mrvl_crypto_set_cipher_session_parameters(
+			sess, cipher_xform) < 0)) {
 		return -EINVAL;
 	}
 
 	if ((auth_xform != NULL) &&
-		((mrvl_crypto_set_auth_session_parameters(sess, auth_xform) < 0) ||
-		(auth_set_prerequisites(sess, auth_xform) != 0))) {
+		((mrvl_crypto_set_auth_session_parameters(
+			sess, auth_xform) < 0)
+		|| (auth_set_prerequisites(sess, auth_xform) != 0))) {
 		return -EINVAL;
 	}
 
-	/* GMAC in DPDK is confiured as cipher-GCM/auth-GMAC, MUSDK requires
-	 * explicit setting of cipher-GMAC */
+	/*
+	 * GMAC in DPDK is confiured as cipher-GCM/auth-GMAC, MUSDK requires
+	 * explicit setting of cipher-GMAC
+	 */
 	if ((sess->sam_sess_params.cipher_mode == SAM_CIPHER_GCM) &&
 		(sess->sam_sess_params.auth_alg == SAM_AUTH_AES_GMAC)) {
 		sess->sam_sess_params.cipher_mode = SAM_CIPHER_GMAC;
@@ -406,8 +416,9 @@ mrvl_crypto_prepare_session_parameters(struct rte_cryptodev *dev,
 	case MRVL_CRYPTO_CHAIN_AUTH_ONLY:
 		auth_xform = xform;
 		if ((auth_xform->auth.algo == RTE_CRYPTO_AUTH_AES_GCM) ||
-				(auth_xform->auth.algo == RTE_CRYPTO_AUTH_AES_GMAC)) {
-			MRVL_CRYPTO_LOG_ERR("AES GCM/GMAC requires configured cipher!");
+			(auth_xform->auth.algo == RTE_CRYPTO_AUTH_AES_GMAC)) {
+			MRVL_CRYPTO_LOG_ERR(
+					"AES GCM/GMAC requires configured cipher!");
 			return -EINVAL;
 		}
 		break;
@@ -415,7 +426,8 @@ mrvl_crypto_prepare_session_parameters(struct rte_cryptodev *dev,
 		return -EINVAL;
 	}
 
-	ret = mrvl_crypto_set_session_parameters(sess, cipher_xform, auth_xform);
+	ret = mrvl_crypto_set_session_parameters(
+			sess, cipher_xform, auth_xform);
 	if (unlikely(ret != 0)) {
 		MRVL_CRYPTO_LOG_ERR(
 		"Invalid/unsupported (cipher/auth) parameters");
@@ -465,20 +477,24 @@ mrvl_make_sure_session_started(struct rte_crypto_op *op,
 		struct mrvl_crypto_qp *qp)
 {
 	struct mrvl_crypto_session *session =
-			(struct mrvl_crypto_session *)op->sym->session->_private;
+		(struct mrvl_crypto_session *)op->sym->session->_private;
 
 	if (session->state == MRVL_SESSION_CONFIGURED) {
 		/* Need to start session first */
 		if (sam_session_create(qp->cio,
 				&session->sam_sess_params,
 				&session->sam_sess)) {
-			/* We're using Dbg here to make sure function is inlined. */
+			/*
+			 * We're using Dbg here to make sure
+			 * the function is inlined.
+			 */
 			MRVL_CRYPTO_LOG_DBG("Failed to start session!");
 			return -EIO;
 		}
 		session->state = MRVL_SESSION_STARTED;
 	} else if (session->state != MRVL_SESSION_STARTED) {
-		MRVL_CRYPTO_LOG_DBG("Invalid session state (%d)!", session->state);
+		MRVL_CRYPTO_LOG_DBG(
+			"Invalid session state (%d)!", session->state);
 		return -EINVAL;
 	}
 	return 0;
@@ -503,14 +519,15 @@ mrvl_request_prepare(struct sam_cio_op_params *request,
 		struct rte_crypto_op *op)
 {
 	struct mrvl_crypto_session *session =
-			(struct mrvl_crypto_session *)op->sym->session->_private;
+		(struct mrvl_crypto_session *)op->sym->session->_private;
 	uint64_t data_offset;
 
-	/* If application delivered us null dst buffer, it means it expects
-	 * us to deliver the result in src buffer. */
-	if (op->sym->m_dst == NULL) {
+	/*
+	 * If application delivered us null dst buffer, it means it expects
+	 * us to deliver the result in src buffer.
+	 */
+	if (op->sym->m_dst == NULL)
 		op->sym->m_dst = op->sym->m_src;
-	}
 
 	request->sa = session->sam_sess;
 	request->cookie = op;
@@ -567,8 +584,10 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 	uint16_t iter_req = 0;
 	int ret;
 	struct sam_cio_op_params requests[nb_ops];
-	/* DPDK uses single fragment buffers, so we can KISS descriptors.
-	 * SAM does not store bd pointers, so on-stack scope will be enough. */
+	/*
+	 * DPDK uses single fragment buffers, so we can KISS descriptors.
+	 * SAM does not store bd pointers, so on-stack scope will be enough.
+	 */
 	struct sam_buf_info src_bd[nb_ops];
 	struct sam_buf_info dst_bd[nb_ops];
 	struct mrvl_crypto_qp *qp = (struct mrvl_crypto_qp *) queue_pair;
@@ -581,9 +600,12 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 
 	/* Iterate through */
 	for (; iter_ops < nb_ops; ++iter_ops, ++iter_req) {
-		if ((mrvl_make_sure_session_started(ops[iter_ops], qp) < 0) ||
-			(mrvl_check_buffer_constraints(ops[iter_ops], qp) < 0)) {
-			MRVL_CRYPTO_LOG_ERR("Error while parameters preparation!");
+		if ((mrvl_make_sure_session_started(
+				ops[iter_ops], qp) < 0) ||
+			(mrvl_check_buffer_constraints(
+				ops[iter_ops], qp) < 0)) {
+			MRVL_CRYPTO_LOG_ERR(
+				"Error while parameters preparation!");
 			qp->stats.enqueue_err_count++;
 			ops[iter_ops]->status = RTE_CRYPTO_OP_STATUS_ERROR;
 			/* Rollback index to reuse request slot. */
@@ -592,14 +614,20 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 			/* Decrease the number of ops to enqueue. */
 			--to_enq;
 
-			/* Number of handled ops is increased (even if the result
-			 * of handling is error). */
+			/*
+			 * Number of handled ops is increased
+			 * (even if the result of handling is error).
+			 */
 			++consumed;
 		} else {
-			/* If we're sure the session is started successfully,
-			 * we can proceed filling in the request.*/
+			/*
+			 * If we're sure the session is started successfully,
+			 * we can proceed filling in the request.
+			 */
 			mrvl_request_prepare(
-					&requests[iter_req], &src_bd[iter_req], &dst_bd[iter_req],
+					&requests[iter_req],
+					&src_bd[iter_req],
+					&dst_bd[iter_req],
 					ops[iter_ops]);
 
 			/* Assume enqueue will succeed. */
@@ -612,19 +640,25 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
 		ret = sam_cio_enq(qp->cio, requests, &to_enq);
 		consumed += to_enq;
 		if (ret < 0) {
-			/* Trust SAM that in this case returned value will be at
-			 * some point correct (now it is returned unmodified).*/
+			/*
+			 * Trust SAM that in this case returned value will be at
+			 * some point correct (now it is returned unmodified).
+			 */
 			qp->stats.enqueue_err_count += to_enq;
 		}
 	}
 
 	if (consumed < nb_ops) {
-		/* No room to send more.
-		 * Correct the state of the rest of requests. */
+		/*
+		 * No room to send more.
+		 * Correct the state of the rest of requests.
+		 */
 		for (iter_ops = consumed; iter_ops < nb_ops; ++iter_ops) {
-			if (ops[iter_ops]->status == RTE_CRYPTO_OP_STATUS_ENQUEUED) {
-				ops[iter_ops]->status = RTE_CRYPTO_OP_STATUS_NOT_PROCESSED;
-			} /* Leve out errors. */
+			if (ops[iter_ops]->status ==
+					RTE_CRYPTO_OP_STATUS_ENQUEUED)
+				ops[iter_ops]->status =
+					RTE_CRYPTO_OP_STATUS_NOT_PROCESSED;
+				/* Leave out errors. */
 		}
 
 	}
@@ -642,9 +676,9 @@ mrvl_crypto_pmd_enqueue_burst(void *queue_pair,
  * @returns Number of elements dequeued.
  */
 static uint16_t
-mrvl_crypto_pmd_dequeue_burst(void *queue_pair ,
-		struct rte_crypto_op **ops ,
-		uint16_t nb_ops )
+mrvl_crypto_pmd_dequeue_burst(void *queue_pair,
+		struct rte_crypto_op **ops,
+		uint16_t nb_ops)
 {
 	int ret;
 	struct mrvl_crypto_qp *qp = queue_pair;
@@ -668,7 +702,7 @@ mrvl_crypto_pmd_dequeue_burst(void *queue_pair ,
 		ops[i] = results[i].cookie;
 		if (results[i].status != SAM_CIO_OK) {
 			MRVL_CRYPTO_LOG_DBG(
-					"CIO returned Error: %d", results[i].status);
+				"CIO returned Error: %d", results[i].status);
 			ops[i]->status = RTE_CRYPTO_OP_STATUS_ERROR;
 		} else {
 			ops[i]->status = RTE_CRYPTO_OP_STATUS_SUCCESS;
@@ -727,7 +761,10 @@ cryptodev_mrvl_crypto_create(struct rte_crypto_vdev_init_params *init_params)
 	internals->max_nb_qpairs = init_params->max_nb_queue_pairs;
 	internals->max_nb_sessions = init_params->max_nb_sessions;
 
-	/* ret == -EEXIST is correct, it means DMA has been already initialized. */
+	/*
+	 * ret == -EEXIST is correct, it means DMA
+	 * has been already initialized.
+	 */
 	ret = mv_sys_dma_mem_init(RTE_MRVL_MUSDK_DMA_MEMSIZE);
 	if ((ret < 0) && (ret != -EEXIST))
 		return ret;
@@ -755,8 +792,10 @@ cryptodev_mrvl_crypto_init(const char *name,
 		const char *input_args)
 {
 	struct rte_crypto_vdev_init_params init_params = {
-		.max_nb_queue_pairs = RTE_CRYPTODEV_VDEV_DEFAULT_MAX_NB_QUEUE_PAIRS,
-		.max_nb_sessions = RTE_CRYPTODEV_VDEV_DEFAULT_MAX_NB_SESSIONS,
+		.max_nb_queue_pairs =
+				RTE_CRYPTODEV_VDEV_DEFAULT_MAX_NB_QUEUE_PAIRS,
+		.max_nb_sessions =
+				RTE_CRYPTODEV_VDEV_DEFAULT_MAX_NB_SESSIONS,
 		.socket_id = rte_socket_id(),
 		.name = {0}
 	};

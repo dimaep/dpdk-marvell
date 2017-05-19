@@ -49,7 +49,6 @@ LIBABIVER := 1
 EXPORT_MAP := rte_mrvl_pmd_version.map
 
 # external library dependencies
-CFLAGS += -I$(LIBMUSDK_PATH)
 CFLAGS += -I$(LIBMUSDK_PATH)/include
 CFLAGS += -I$(LIBMUSDK_PATH)/include/drivers
 CFLAGS += -DMVCONF_ARCH_DMA_ADDR_T_64BIT
