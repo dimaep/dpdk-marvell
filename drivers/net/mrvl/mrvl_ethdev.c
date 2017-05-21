@@ -952,24 +952,25 @@ mrvl_desc_to_packet_type_and_offset(struct pp2_ppio_desc *desc,
 	return packet_type;
 }
 
-static uint64_t
+static inline uint64_t
 mrvl_desc_to_ol_flags(struct pp2_ppio_desc *desc)
 {
-	enum pp2_inq_desc_status status = pp2_ppio_inq_desc_get_pkt_error(desc);
+	uint64_t flags;
 
-	if (likely(status == PP2_DESC_ERR_MAC_OK))
-		return PKT_RX_IP_CKSUM_GOOD | PKT_RX_L4_CKSUM_GOOD;
+	if (unlikely(DM_RXD_GET_ES(desc)))
+		return 0;
 
-	if (unlikely(status == PP2_DESC_ERR_IPV4_HDR))
-		return PKT_RX_IP_CKSUM_BAD;
+	if (unlikely(DM_RXD_GET_IP_HDR_ERR(desc)))
+		flags = PKT_RX_IP_CKSUM_BAD;
+	else
+		flags = PKT_RX_IP_CKSUM_GOOD;
 
-	if (unlikely(status == PP2_DESC_ERR_L4_CHECKSUM))
-		return PKT_RX_IP_CKSUM_GOOD | PKT_RX_L4_CKSUM_BAD;
+	if (likely(DM_RXD_GET_L4_CHK_OK(desc)))
+		flags |= PKT_RX_L4_CKSUM_GOOD;
+	else
+		flags |= PKT_RX_L4_CKSUM_BAD;
 
-	RTE_LOG(ERR, PMD, "rx packet error: %d\n", status);
-
-	/* return unknown state */
-	return 0;
+	return flags;
 }
 
 static uint16_t
