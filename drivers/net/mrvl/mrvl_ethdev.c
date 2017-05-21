@@ -466,6 +466,13 @@ mrvl_promiscuous_enable(struct rte_eth_dev *dev)
 	struct mrvl_priv *priv = dev->data->dev_private;
 
 	pp2_ppio_set_uc_promisc(priv->ppio, 1);
+}
+
+static void
+mrvl_allmulticast_enable(struct rte_eth_dev *dev)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+
 	pp2_ppio_set_mc_promisc(priv->ppio, 1);
 }
 
@@ -475,6 +482,13 @@ mrvl_promiscuous_disable(struct rte_eth_dev *dev)
 	struct mrvl_priv *priv = dev->data->dev_private;
 
 	pp2_ppio_set_uc_promisc(priv->ppio, 0);
+}
+
+static void
+mrvl_allmulticast_disable(struct rte_eth_dev *dev)
+{
+	struct mrvl_priv *priv = dev->data->dev_private;
+
 	pp2_ppio_set_mc_promisc(priv->ppio, 0);
 }
 
@@ -862,7 +876,9 @@ static const struct eth_dev_ops mrvl_ops = {
 	.dev_close = mrvl_dev_close,
 	.link_update = mrvl_link_update,
 	.promiscuous_enable = mrvl_promiscuous_enable,
+	.allmulticast_enable = mrvl_allmulticast_enable,
 	.promiscuous_disable = mrvl_promiscuous_disable,
+	.allmulticast_disable = mrvl_allmulticast_disable,
 	.mac_addr_remove = mrvl_mac_addr_remove,
 	.mac_addr_add = mrvl_mac_addr_add,
 	.mac_addr_set = mrvl_mac_addr_set,
