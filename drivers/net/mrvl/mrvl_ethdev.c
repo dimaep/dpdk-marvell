@@ -1018,8 +1018,10 @@ mrvl_rx_pkt_burst(void *rxq, struct rte_mbuf **rx_pkts, uint16_t nb_pkts)
 }
 
 static int
-mrvl_prepare_proto_info(uint64_t ol_flags, enum pp2_outq_l3_type *l3_type,
-			enum pp2_outq_l4_type *l4_type, int *gen_l3_cksum,
+mrvl_prepare_proto_info(uint64_t ol_flags, uint32_t packet_type,
+			enum pp2_outq_l3_type *l3_type,
+			enum pp2_outq_l4_type *l4_type,
+			int *gen_l3_cksum,
 			int *gen_l4_cksum)
 {
 	/*
@@ -1040,10 +1042,10 @@ mrvl_prepare_proto_info(uint64_t ol_flags, enum pp2_outq_l3_type *l3_type,
 	}
 
 	ol_flags &= PKT_TX_L4_MASK;
-	if (ol_flags == PKT_TX_TCP_CKSUM) {
+	if ((packet_type & RTE_PTYPE_L4_TCP) && (ol_flags == PKT_TX_TCP_CKSUM)) {
 		*l4_type = PP2_OUTQ_L4_TYPE_TCP;
 		*gen_l4_cksum = 1;
-	} else if (ol_flags == PKT_TX_UDP_CKSUM) {
+	} else if ((packet_type & RTE_PTYPE_L4_UDP) && (ol_flags == PKT_TX_UDP_CKSUM)) {
 		*l4_type = PP2_OUTQ_L4_TYPE_UDP;
 		*gen_l4_cksum = 1;
 	} else {
@@ -1088,8 +1090,8 @@ mrvl_tx_pkt_burst(void *txq, struct rte_mbuf **tx_pkts, uint16_t nb_pkts)
 		 * in case unsupported ol_flags were passed
 		 * do not update descriptor offload information
 		 */
-		ret = mrvl_prepare_proto_info(mbuf->ol_flags, &l3_type,
-					      &l4_type, &gen_l3_cksum,
+		ret = mrvl_prepare_proto_info(mbuf->ol_flags, mbuf->packet_type,
+					      &l3_type, &l4_type, &gen_l3_cksum,
 					      &gen_l4_cksum);
 		if (ret)
 			continue;
