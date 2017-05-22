@@ -1373,8 +1373,12 @@ rte_pmd_mrvl_probe(const char *name, const char *params)
 	rte_kvargs_process(kvlist, MRVL_IFACE_NAME_ARG,
 			   mrvl_get_ifnames, &ifnames);
 
+	/*
+	 * ret == -EEXIST is correct, it means DMA
+	 * has been already initialized (by another PMD).
+	 */
 	ret = mv_sys_dma_mem_init(RTE_MRVL_MUSDK_DMA_MEMSIZE);
-	if (ret)
+	if ((ret < 0) && (ret != -EEXIST))
 		goto out_free_kvlist;
 
 	ret = mrvl_init_pp2();
