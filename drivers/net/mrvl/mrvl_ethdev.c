@@ -38,6 +38,10 @@
 #include <rte_vdev.h>
 #include <rte_cycles.h>
 
+#ifdef container_of
+#undef container_of
+#endif
+
 #include <drivers/mv_pp2.h>
 #include <drivers/mv_pp2_bpool.h>
 #include <drivers/mv_pp2_hif.h>
@@ -419,7 +423,7 @@ mrvl_link_update(struct rte_eth_dev *dev, int wait_to_complete)
 	edata.cmd = ETHTOOL_GSET;
 
 	strcpy(req.ifr_name, dev->data->name);
-	req.ifr_data = &edata;
+	req.ifr_data = (void *)&edata;
 
 	rte_delay_ms(100);
 
@@ -1218,7 +1222,7 @@ mrvl_priv_create(const char *dev_name)
 	if (!priv)
 		return NULL;
 
-	ret = pp2_netdev_get_port_info(dev_name, &priv->pp_id, &priv->ppio_id);
+	ret = pp2_netdev_get_port_info((char *)dev_name, &priv->pp_id, &priv->ppio_id);
 	if (ret)
 		goto out_free_priv;
 
