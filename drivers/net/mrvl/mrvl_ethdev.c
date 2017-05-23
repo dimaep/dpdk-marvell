@@ -518,6 +518,9 @@ mrvl_mac_addr_add(struct rte_eth_dev *dev, struct ether_addr *mac_addr,
 	char buf[ETHER_ADDR_FMT_SIZE];
 	int ret;
 
+	if (index == 0)
+		return;
+
 	ret = pp2_ppio_add_mac_addr(priv->ppio, mac_addr->addr_bytes);
 	if (ret) {
 		ether_format_addr(buf, sizeof(buf), mac_addr);
