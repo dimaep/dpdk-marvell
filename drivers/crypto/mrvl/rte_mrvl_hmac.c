@@ -58,7 +58,7 @@ typedef void (*mrvl_iv_f)(unsigned char[], int,
  * @param Hash.
  * @returns 0 for success, negative value otherwise.
  */
-typedef int (*mrvl_hash_f)(const u_int8_t*, size_t, char[]);
+typedef int (*mrvl_hash_f)(const u_int8_t*, size_t, unsigned char[]);
 
 /**
  * Generate HMAC for various alorithms.
@@ -88,7 +88,7 @@ int mrvl_generic_hmac_pads_gen(unsigned char key[], int key_len,
 		 * In case the key is longer than max_key_len bits
 		 * the algorithm will hash the key instead.
 		 */
-		error = hash_f(key, key_len, (char *)sess_key);
+		error = hash_f(key, key_len, sess_key);
 		if (error != 0)
 			return -1;
 	} else {
@@ -119,9 +119,9 @@ int mrvl_generic_hmac_pads_gen(unsigned char key[], int key_len,
  * @returns 0. Always.
  */
 static
-int mrvl_sha1(const u_int8_t *data, size_t len, char hash[])
+int mrvl_sha1(const u_int8_t *data, size_t len, unsigned char hash[])
 {
-	mv_sha1(data, len, (unsigned char *)hash);
+	mv_sha1(data, len, hash);
 	return 0;
 }
 
@@ -134,9 +134,9 @@ int mrvl_sha1(const u_int8_t *data, size_t len, char hash[])
  * @returns 0. Always.
  */
 static
-int mrvl_md5(const u_int8_t *data, size_t len, char hash[])
+int mrvl_md5(const u_int8_t *data, size_t len, unsigned char hash[])
 {
-	mv_md5(data, len, (unsigned char *)hash);
+	mv_md5(data, len, hash);
 	return 0;
 }
 
@@ -149,9 +149,14 @@ int mrvl_md5(const u_int8_t *data, size_t len, char hash[])
  * @returns 0. Always.
  */
 static
-int mrvl_sha256(const u_int8_t *data, size_t len, char hash[])
+int mrvl_sha256(const u_int8_t *data, size_t len, unsigned char hash[])
 {
-	(void) mv_sha256_data(data, len, hash);
+	SHA256_CTX ctx;
+
+	mv_sha256_init(&ctx);
+	mv_sha256_update(&ctx, data, len);
+	mv_sha256_final(hash, &ctx);
+
 	return 0;
 }
 
@@ -164,9 +169,14 @@ int mrvl_sha256(const u_int8_t *data, size_t len, char hash[])
  * @returns 0. Always.
  */
 static
-int mrvl_sha384(const u_int8_t *data, size_t len, char hash[])
+int mrvl_sha384(const u_int8_t *data, size_t len, unsigned char hash[])
 {
-	(void) mv_sha384_data(data, len, hash);
+	SHA384_CTX ctx;
+
+	mv_sha384_init(&ctx);
+	mv_sha384_update(&ctx, data, len);
+	mv_sha384_final(hash, &ctx);
+
 	return 0;
 }
 
@@ -179,9 +189,14 @@ int mrvl_sha384(const u_int8_t *data, size_t len, char hash[])
  * @returns 0. Always.
  */
 static
-int mrvl_sha512(const u_int8_t *data, size_t len, char hash[])
+int mrvl_sha512(const u_int8_t *data, size_t len, unsigned char hash[])
 {
-	(void) mv_sha512_data(data, len, hash);
+	SHA512_CTX ctx;
+
+	mv_sha512_init(&ctx);
+	mv_sha512_update(&ctx, data, len);
+	mv_sha512_final(hash, &ctx);
+
 	return 0;
 }
 

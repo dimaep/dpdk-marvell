@@ -361,7 +361,7 @@ mrvl_crypto_set_session_parameters(struct mrvl_crypto_session *sess,
 	}
 
 	/*
-	 * GMAC in DPDK is confiured as cipher-GCM/auth-GMAC, MUSDK requires
+	 * GMAC in DPDK is configured as cipher-GCM/auth-GMAC, MUSDK requires
 	 * explicit setting of cipher-GMAC
 	 */
 	if ((sess->sam_sess_params.cipher_mode == SAM_CIPHER_GCM) &&
