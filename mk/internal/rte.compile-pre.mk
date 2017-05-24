@@ -86,7 +86,7 @@ C_TO_O_DISP = $(if $(V),"$(C_TO_O_STR)","  CC $(@)")
 endif
 PMDINFO_GEN = $(RTE_SDK_BIN)/app/dpdk-pmdinfogen $@ $@.pmd.c
 PMDINFO_CC = $(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@.pmd.o $@.pmd.c
-PMDINFO_LD = $(CROSS)ld -r -o $@.o $@.pmd.o $@ $(LDFLAGS)
+PMDINFO_LD = $(CROSS)ld $(LDFLAGS) -r -o $@.o $@.pmd.o $@
 PMDINFO_TO_O = if grep -q 'RTE_PMD_REGISTER_.*(.*)' $<; then \
 	echo "$(if $V,$(PMDINFO_GEN),  PMDINFO $@.pmd.c)" && \
 	$(PMDINFO_GEN) && \
